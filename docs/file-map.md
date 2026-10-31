@@ -52,7 +52,7 @@
 | `audit.go` | 后台写操作审计日志中间件（包装 ResponseWriter，请求后记录） |
 | `body_cleanup.go` | 请求结束后清理请求体磁盘/内存存储与文件源 |
 | `cache.go` | 为静态 Web 资源设置 `Cache-Control` 头 |
-| `cors.go` | CORS 与 `X-Powered-By` 头 |
+| `cors.go` | CORS（两种互斥模式：默认通配符无凭据 / 可信来源白名单携带凭据）与 `X-New-Api-Version` 头 |
 | `disable-cache.go` | 输出 no-cache 头 |
 | `distributor.go` | 渠道分发：提取模型、渠道亲和性、`SetupContextForSelectedChannel` 选中渠道 |
 | `email-verification-rate-limit.go` | 验证邮件按 IP 的 Redis/内存限流 |

@@ -447,88 +447,91 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 	}
 }
 
-// NewApiUserAuth 只验证 New-Api-User header，不需要 Authorization
-// 用于 NewAPI 实例之间的调用，只需要提供用户 ID 即可
+// requireNewApiUserHeaderMatch 校验 New-Api-User header 与已认证用户是否一致。
+//
+// 安全说明：New-Api-User 只是一个用于代理/多实例场景的“用户标识提示”，
+// 绝不能作为认证凭据。任何把它当作唯一凭据的中间件都会允许攻击者通过
+// 伪造该 header 冒充任意用户（包括 root）。因此这里只做“比对”：
+// 调用方必须已经通过 authorizationToken 校验拿到 c 中的用户身份。
+//
+// header 缺省时保持兼容（部分老客户端不发送），但一旦发送就必须匹配。
+func requireNewApiUserHeaderMatch(c *gin.Context) bool {
+	apiUserIdStr := strings.TrimSpace(c.Request.Header.Get("New-Api-User"))
+	if apiUserIdStr == "" {
+		return true
+	}
+	apiUserId, err := strconv.Atoi(apiUserIdStr)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"code":    "AUTH_USER_ID_FORMAT_ERROR",
+			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdFormatError),
+		})
+		return false
+	}
+	authenticatedId := c.GetInt("id")
+	if authenticatedId <= 0 {
+		// 理论上不可达：调用方必须先完成真实凭据校验。
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"code":    "AUTH_UNAUTHORIZED",
+			"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+		})
+		return false
+	}
+	if apiUserId != authenticatedId {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"code":    "AUTH_USER_ID_MISMATCH",
+			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdMismatch),
+		})
+		return false
+	}
+	return true
+}
+
+// NewApiUserAuth 用于 NewAPI 实例之间的调用。
+//
+// 历史实现只读取 New-Api-User header 就把目标用户的 id/role 写入上下文，
+// 相当于把该 header 当成认证凭据，可被任意未认证请求用来冒充 root。
+// 现在统一要求真实凭据（dashboard access token 或 PAT），
+// 并把 New-Api-User 降级为一致性校验。
 func NewApiUserAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		// 获取 New-Api-User header
-		apiUserIdStr := c.Request.Header.Get("New-Api-User")
-		if apiUserIdStr == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"message": common.TranslateMessage(c, i18n.MsgAuthUserIdNotProvided),
-			})
-			c.Abort()
-			return
+		if _, started := c.Get(accessTokenAuditContextKey); !started {
+			defer finishAccessTokenAudit(c)
 		}
-
-		// 解析用户 ID
-		apiUserId, err := strconv.Atoi(apiUserIdStr)
+		user, identity, useAccessToken, err := authenticateDashboardRequest(c)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"message": common.TranslateMessage(c, i18n.MsgAuthUserIdFormatError),
-			})
-			c.Abort()
+			writeDashboardAuthError(c, err)
 			return
 		}
-
-		// 验证用户是否存在且状态正常
-		user, err := model.GetUserById(apiUserId, false)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				c.JSON(http.StatusUnauthorized, gin.H{
-					"success": false,
-					"message": "用户不存在",
-				})
-			} else {
-				common.SysLog("NewApiUserAuth GetUserById database error: " + err.Error())
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"success": false,
-					"message": common.TranslateMessage(c, i18n.MsgDatabaseError),
-				})
-			}
-			c.Abort()
+		if user.Status != common.UserStatusEnabled {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "code": "AUTH_USER_DISABLED", "message": userBannedMessage(c, user.BanReason)})
 			return
 		}
-
-		// 检查用户状态
-		if user.Status == common.UserStatusDisabled {
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"message": userBannedMessage(c, user.BanReason),
-			})
-			c.Abort()
+		if response, banned := user.ActiveAutoBan(); banned {
+			abortDashboardWithAutoBanResponse(c, response)
 			return
 		}
-
-		// 设置上下文
-		c.Set("id", user.Id)
-		c.Set("username", user.Username)
-		c.Set("role", user.Role)
+		if !validUserInfo(user.Username, user.Role) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "code": "AUTH_USER_INVALID", "message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid)})
+			return
+		}
+		setDashboardAuthContext(c, user, identity, useAccessToken)
+		if !requireNewApiUserHeaderMatch(c) {
+			return
+		}
 		c.Next()
 	}
 }
 
-// UserOrNewApiUserAuth 支持两种认证方式：UserAuth（带 token）或 NewApiUserAuth（New-Api-User header）
-// 优先尝试 UserAuth，如果失败则尝试 NewApiUserAuth
+// UserOrNewApiUserAuth 保留为兼容别名。
+//
+// 两种“模式”现在都建立在真实凭据之上：无论是否携带 New-Api-User header，
+// 都必须先通过 dashboard 凭据校验，随后 header（若存在）只做一致性比对。
 func UserOrNewApiUserAuth() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		authHeader := c.Request.Header.Get("Authorization")
-		if authHeader != "" {
-			UserAuth()(c)
-			return
-		}
-		if c.Request.Header.Get("New-Api-User") != "" {
-			NewApiUserAuth()(c)
-			return
-		}
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": "Unauthorized, not logged in and no access token provided",
-		})
-		c.Abort()
-	}
+	return NewApiUserAuth()
 }
 
 func TokenAuth() func(c *gin.Context) {

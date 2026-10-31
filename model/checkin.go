@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -164,11 +165,37 @@ func newCheckin(userId int, date string, createdAt int64, quotaAwarded int) *Che
 	}
 }
 
+// checkinMonthRange validates a `YYYY-MM` month and returns the inclusive
+// date range for it.
+//
+// The previous implementation appended literal "-01"/"-31" and relied on
+// string comparison happening to order correctly for short months, and it
+// accepted any caller-supplied string without validation. Deriving the range
+// from time.Date both validates the input and yields the real last day, so
+// February and 30-day months no longer depend on lexicographic coincidence.
+func checkinMonthRange(month string) (string, string, error) {
+	month = strings.TrimSpace(month)
+	if month == "" {
+		return "", "", errors.New("月份不能为空")
+	}
+	parsed, err := time.Parse("2006-01", month)
+	if err != nil {
+		return "", "", errors.New("月份格式无效，应为 YYYY-MM")
+	}
+	// time.Parse already rejects out-of-range months (e.g. 2026-13), and
+	// normalizing to the first day keeps the range calculation exact.
+	start := time.Date(parsed.Year(), parsed.Month(), 1, 0, 0, 0, 0, time.UTC)
+	// First day of the next month minus one day is the real month end.
+	end := start.AddDate(0, 1, -1)
+	return start.Format("2006-01-02"), end.Format("2006-01-02"), nil
+}
+
 // GetUserCheckinStats 获取用户签到统计信息
 func GetUserCheckinStats(userId int, month string) (map[string]any, error) {
-	// 获取指定月份的所有签到记录
-	startDate := month + "-01"
-	endDate := month + "-31"
+	startDate, endDate, err := checkinMonthRange(month)
+	if err != nil {
+		return nil, err
+	}
 
 	records, err := GetUserCheckinRecords(userId, startDate, endDate)
 	if err != nil {

@@ -2,7 +2,7 @@
 
 **影响的渠道**：4 号（grok2api）、44 号（轴心国）
 **严重级别**：中（数据不一致，非崩溃）
-**状态**：已修复（数据库层），**根因未修**
+**状态**：数据层已修复；代码层根因经 2026-10-31 复核**已确认修复**（详见第六节）
 
 ---
 
@@ -216,46 +216,55 @@ echo "[OK] 服务状态: $(systemctl is-active new-api)"
 
 ---
 
-## 六、根因未修（建议的代码层修复方向）
+## 六、根因修复状态（2026-10-31 复核更新）
 
-上面的方案只是**修数据**，没修**产生脏数据的代码**。建议在 new-api 源码里排查以下几点：
+> **原结论"根因未修"已过期。** 经复核当前代码，根因**已在代码层修复**，
+> 新版本不会再产生空分组脏数据。以下为逐条核对结果。
 
-### 1. 渠道创建时的分组默认值
+### 1. 渠道创建时的分组默认值 — ✅ 已修复
 
-检查渠道新增接口，当请求未带 `group` 或传空串时，应该**兜底为 `default`**，而不是直接写入空串。
+`model/channel.go:333-339` 新增了 `NormalizeGroup()`，空分组统一兜底为
+`DefaultChannelGroup`（`"default"`），并在三处调用：
 
-排查点：`model/channel.go` 或 `controller/channel.go` 里的 `AddChannel` / `UpdateChannel`，找 `group` 字段的赋值逻辑。
+- `model/channel.go:644` — `InsertTx`（渠道新增）
+- `model/channel.go:665` — `UpdateTx`（渠道更新）
+- `service/channel_mutation.go:843` — 管理员更新渠道
 
-```go
-// 疑似问题：group 为空时不兜底
-channel.Group = strings.TrimSpace(channel.Group)
-// 建议增加：
-if channel.Group == "" {
-    channel.Group = "default"
-}
-```
+因此后台页面保存、API 调用、批量导入都会经过归一化，不再写入空串。
 
-### 2. abilities 重建逻辑
+### 2. abilities 重建逻辑 — ✅ 已修复
 
-渠道保存时应该**重建该渠道的 abilities 记录**。检查 `UpdateAbility` / `AddAbilities`，确认：
-
-- 是否会删除该渠道的旧 abilities（如果按 `channel_id` 删，应该能覆盖空分组情况）
-- 若旧记录未被清理，就会残留脏数据
+`model/ability.go:352` 的 `UpdateAbilities` 按 `channel_id` 全删后重建：
 
 ```go
-// 重建时应按 channel_id 全删，而不是按 (group, channel_id)
-DB.Where("channel_id = ?", channel.Id).Delete(&Ability{})
+DB.Where("channel_id = ?", channelId).Delete(&Ability{})
 ```
 
-如果原始代码是 `DB.Where("group = ? AND channel_id = ?", oldGroup, channel.Id).Delete(...)`，当 `oldGroup` 为空串时可能匹配不到或被跳过，导致残留。
+不依赖旧 `group` 值，因此空分组的历史记录也不会残留。
 
-### 3. 前端校验提示缺失
+### 3. 前端校验提示缺失 — ⚠️ 未复核
 
-前端保存失败时应该弹出错误提示，而不是静默失败。这会让用户根本不知道发生了什么。
+本次审查聚焦后端安全，前端表单校验与错误提示体验未做评估。
 
-### 4. 数据迁移/导入脚本
+### 4. 数据迁移/导入脚本 — ⚠️ 需自查
 
-如果这批渠道是通过脚本或 SQL 直接导入的（而非后台页面创建），检查导入脚本有没有正确写 `group` 和 `abilities`。
+如果存量渠道是通过脚本或 SQL 直接导入的（绕过上述代码路径），仍可能产生脏数据。
+建议长期保留第三节的体检 SQL 并定期执行。
+
+### 存量数据仍需手工迁移
+
+代码修复只保证**不再产生**新的空分组记录。已经写入数据库的脏数据
+（本次涉及的 4 号、44 号渠道）仍需按第四、五节的手工 SQL 迁移处理，
+因为 `abilities` 主键含 `group`，无法直接 UPDATE。
+
+### 回归测试
+
+`service/channel_mutation_test.go:125-130` 已有断言覆盖：空分组会被归一化，
+并正确写入 `abilities`。可运行以下命令验证：
+
+```bash
+go test ./service/ -run "TestChannelMutation" -v
+```
 
 ---
 
@@ -309,4 +318,5 @@ systemctl restart new-api && sleep 5 && \
 
 > `channels.group` 为空串 → 前端保存校验失败 + `abilities` 无法被分组索引 → 模型广场不显示。
 > 修复要动两张表，且 `abilities` 因主键含 `group` **必须"插新删旧"**，改完**必须重启服务**。
-> **根因在新增渠道时对空 `group` 未做兜底，建议在源码层补默认值。**
+> 代码层根因（空 `group` 未兜底、`abilities` 按 `group` 删导致残留）已在当前版本修复，
+> 见第六节；存量脏数据仍需手工迁移。

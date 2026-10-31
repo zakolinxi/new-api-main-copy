@@ -323,10 +323,17 @@ func SaveTmpFile(filename string, data io.Reader) (string, error) {
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to create temporary file %s", filename)
 	}
-	defer f.Close()
 
 	_, err = io.Copy(f, data)
+	if closeErr := f.Close(); err == nil && closeErr != nil {
+		err = closeErr
+	}
 	if err != nil {
+		// Remove the partially written file so a failed upload cannot leave
+		// orphaned data behind in the temp directory.
+		if removeErr := os.Remove(f.Name()); removeErr != nil {
+			SysError("failed to remove temporary file " + f.Name() + ": " + removeErr.Error())
+		}
 		return "", errors.Wrapf(err, "failed to copy data to temporary file %s", filename)
 	}
 

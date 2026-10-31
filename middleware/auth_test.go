@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -385,4 +386,85 @@ func TestApplyWebSocketSubprotocolAuthorizationReadsRepeatedHeaders(t *testing.T
 
 	assert.True(t, applyWebSocketSubprotocolAuthorization(header))
 	assert.Equal(t, "Bearer sk-later-field", header.Get("Authorization"))
+}
+
+// TestNewApiUserHeaderCannotAuthenticateAlone 锁定 New-Api-User 冒充漏洞的修复。
+// 仅发送该 header、不带任何真实凭据时，必须被拒绝（401），
+// 绝不能以 header 指定的用户（尤其是 root）身份进入 handler。
+func TestNewApiUserHeaderCannotAuthenticateAlone(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	gin.SetMode(gin.TestMode)
+
+	root := &model.User{
+		Username: "root-user", Password: "password-placeholder", Role: common.RoleRootUser,
+		Status: common.UserStatusEnabled, Group: "default", AuthVersion: 1, AffCode: "aff-root",
+	}
+	require.NoError(t, model.DB.Create(root).Error)
+
+	routers := map[string]gin.HandlerFunc{
+		"NewApiUserAuth":       NewApiUserAuth(),
+		"UserOrNewApiUserAuth": UserOrNewApiUserAuth(),
+	}
+	for name, authMiddleware := range routers {
+		t.Run(name, func(t *testing.T) {
+			router := gin.New()
+			router.GET("/protected", authMiddleware, func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"id": c.GetInt("id"), "role": c.GetInt("role")})
+			})
+
+			request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+			request.Header.Set("New-Api-User", strconv.Itoa(root.Id))
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+
+			assert.Equal(t, http.StatusUnauthorized, response.Code, "header-only request must not authenticate")
+			assert.NotContains(t, response.Body.String(), `"role":100`)
+		})
+	}
+}
+
+// TestNewApiUserHeaderMismatchIsRejected 验证真实凭据用户与 header 不一致时被拒绝。
+func TestNewApiUserHeaderMismatchIsRejected(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	gin.SetMode(gin.TestMode)
+
+	attacker := createMiddlewarePATUser(t, "mismatch-attacker", "attacker-pat-token")
+	victim := createMiddlewarePATUser(t, "mismatch-victim", "victim-pat-token")
+	require.NotEqual(t, attacker.Id, victim.Id)
+
+	router := gin.New()
+	router.GET("/protected", UserOrNewApiUserAuth(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"id": c.GetInt("id"), "role": c.GetInt("role")})
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Authorization", "Bearer attacker-pat-token")
+	request.Header.Set("New-Api-User", strconv.Itoa(victim.Id))
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Contains(t, response.Body.String(), "AUTH_USER_ID_MISMATCH")
+}
+
+// TestNewApiUserHeaderMatchingAuthenticatedUserIsAllowed 验证正常调用链不被破坏。
+func TestNewApiUserHeaderMatchingAuthenticatedUserIsAllowed(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	gin.SetMode(gin.TestMode)
+
+	user := createMiddlewarePATUser(t, "matching-header-user", "matching-pat-token")
+
+	router := gin.New()
+	router.GET("/protected", UserOrNewApiUserAuth(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"id": c.GetInt("id"), "role": c.GetInt("role")})
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Authorization", "Bearer matching-pat-token")
+	request.Header.Set("New-Api-User", strconv.Itoa(user.Id))
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	assert.Contains(t, response.Body.String(), fmt.Sprintf(`"id":%d`, user.Id))
 }

@@ -105,7 +105,7 @@ func SetApiRouter(router *gin.Engine) {
 			userRoute.GET("/groups", controller.GetUserGroups)
 
 			selfRoute := userRoute.Group("/")
-			selfRoute.Use(middleware.DisableCache(), middleware.UserOrNewApiUserAuth()) // 支持 token 或 New-Api-User header
+			selfRoute.Use(middleware.DisableCache(), middleware.UserOrNewApiUserAuth()) // 需要真实凭据（access token 或 PAT）；New-Api-User 仅作一致性校验
 			{
 				selfRoute.GET("/sessions", middleware.DisableCache(), controller.GetLoginSessions)
 				selfRoute.DELETE("/sessions/:sid", middleware.DisableCache(), controller.DeleteLoginSession)
@@ -175,15 +175,15 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)
 				selfRoute.POST("/2fa/setup", middleware.UserCriticalRateLimit("security-verification"), middleware.DisableCache(), controller.Setup2FA)
 				selfRoute.POST("/2fa/enable", middleware.UserCriticalRateLimit("security-verification"), middleware.DisableCache(), controller.Enable2FA)
-				selfRoute.POST("/2fa/disable", middleware.DisableCache(), controller.Disable2FA)
-				selfRoute.POST("/2fa/backup_codes", middleware.DisableCache(), controller.RegenerateBackupCodes)
+				selfRoute.POST("/2fa/disable", middleware.UserCriticalRateLimit("security-verification"), middleware.DisableCache(), controller.Disable2FA)
+				selfRoute.POST("/2fa/backup_codes", middleware.UserCriticalRateLimit("security-verification"), middleware.DisableCache(), controller.RegenerateBackupCodes)
 
 				// Custom OAuth bindings
 				selfRoute.GET("/oauth/bindings", controller.GetUserOAuthBindings)
 				selfRoute.DELETE("/oauth/bindings/:provider_id", controller.UnbindCustomOAuth)
 			}
 
-			// Check-in routes - 使用 NewApiUserAuth，只需要 New-Api-User header
+			// Check-in routes - 需要真实凭据；New-Api-User 仅作一致性校验
 			checkinRoute := userRoute.Group("/")
 			checkinRoute.Use(middleware.NewApiUserAuth())
 			{

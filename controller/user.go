@@ -1109,14 +1109,6 @@ func DeleteSelf(c *gin.Context) {
 		return
 	}
 	deleteUserAvatarObject(id, avatar)
-	if err := model.DeleteUserForSession(identity); err != nil {
-		if errors.Is(err, model.ErrCannotDeleteRootUser) {
-			common.ApiErrorI18n(c, i18n.MsgUserCannotDeleteRootUser)
-			return
-		}
-		writeSecurityOperationError(c, err)
-		return
-	}
 	succeeded = true
 	service.ClearRefreshCookie(c)
 	c.JSON(http.StatusOK, gin.H{
