@@ -289,7 +289,7 @@ go test ./service/ -run "TestChannelMutation" -v
 
 | 项目 | 值 |
 |---|---|
-| 服务器 | <SERVER_IP>:<SSH_PORT> |
+| 服务器 | `<SERVER_IP>:<SSH_PORT>` |
 | 数据库 | MySQL 127.0.0.1:3306 / `new_api` |
 | 数据库账号 | `<DB_USER>`（密码见 `/etc/new-api.env` 的 `SQL_DSN`） |
 | 服务 | systemd `new-api.service`，`/opt/new-api/new-api --port 3000` |
