@@ -1247,3 +1247,34 @@ body[theme-mode='dark'] .classic-glass-header {
     border-radius: 0 !important;
   }
 }
+
+/* 使用日志的「合并行」。
+   折叠只是视图，不是另一类记录，所以这里用极淡的中性底 + 左侧一条主色竖线，
+   而不是整行彩色底——彩色底在密集表格里太抢眼，读数反而更累。 */
+.logs-collapsed-row > td {
+  background-color: var(--semi-color-fill-0);
+}
+
+.logs-collapsed-row:hover > td {
+  background-color: var(--semi-color-fill-1);
+}
+
+.logs-collapsed-row > td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--semi-color-primary);
+}
+
+/* 合并调用明细弹窗：每行是「数量 + 缓存小字」两行，Semi 默认行高太松，
+   50 条得滚很久；这里压紧单元格内边距，并让表头在滚动区里吸顶。 */
+.collapsed-members-table .semi-table-row > .semi-table-row-cell {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.collapsed-members-table .semi-table-thead > .semi-table-row > .semi-table-row-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  background: var(--semi-color-bg-1);
+}

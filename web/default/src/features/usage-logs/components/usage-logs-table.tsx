@@ -49,6 +49,15 @@ const logTypeRowTint: Record<number, string> = {
   [LOG_TYPE_ENUM.REFUND]: 'bg-blue-50/30 dark:bg-blue-950/15',
 }
 
+// Folded rows collect many calls, so they get their own tint instead of the
+// per-type one, otherwise a folded error log would look like a single failure.
+/**
+ * Tint for a folded row. Deliberately neutral: the badges already say "this is
+ * a merge", and a saturated colour on a dense table makes the numbers harder to
+ * read instead of easier.
+ */
+const COLLAPSED_ROW_TINT = 'bg-muted/50 dark:bg-muted/25'
+
 function getColumnVisibilityStorageKey(
   logCategory: LogCategory,
   isAdmin: boolean
@@ -150,7 +159,9 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const isLoadingData = isLoading || (isFetching && !data)
 
   const { table } = useDataTable({
-    data: logs as Record<string, unknown>[],
+    // The response is a discriminated union per log category; the table only
+    // needs opaque row records.
+    data: logs as unknown as Record<string, unknown>[],
     columns: columns as ColumnDef<Record<string, unknown>>[],
     columnFilters,
     columnVisibilityStorageKey: getColumnVisibilityStorageKey(
@@ -199,11 +210,14 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
         )
       }
       renderRow={(row) => {
-        const logType = (row.original as Record<string, unknown>).type as
-          | number
-          | undefined
+        const original = row.original as Record<string, unknown>
+        const logType = original.type as number | undefined
         const tintClass =
-          isCommon && logType != null ? (logTypeRowTint[logType] ?? '') : ''
+          original.collapsed_count != null
+            ? COLLAPSED_ROW_TINT
+            : isCommon && logType != null
+              ? (logTypeRowTint[logType] ?? '')
+              : ''
 
         return (
           <DataTableRow

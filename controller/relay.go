@@ -167,7 +167,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	if needSensitiveCheck && meta != nil {
-		contains, words := service.CheckSensitiveText(meta.CombineText)
+		contains, words, checkErr := service.CheckSensitiveText(meta.CombineText)
+		if checkErr != nil {
+			// 文本超出过滤预算：这是请求问题，不是敏感词命中，不能走违规分支。
+			newAPIError = types.NewError(checkErr, types.ErrorCodeInvalidRequest, types.ErrOptionWithStatusCode(http.StatusBadRequest))
+			return
+		}
 		if contains {
 			logger.LogWarn(c, fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", ")))
 			evidenceWords := words

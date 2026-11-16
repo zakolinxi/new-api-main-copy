@@ -34,6 +34,7 @@ const defaultSecuritySettings: SecuritySettings = {
   ChannelConcurrencyDefault: 0,
   CheckSensitiveEnabled: false,
   CheckSensitiveOnPromptEnabled: false,
+  SensitiveWordMatchMode: 'keyword',
   SensitiveWords: '',
   'fetch_setting.enable_ssrf_protection': true,
   'fetch_setting.allow_private_ip': false,

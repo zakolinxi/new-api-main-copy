@@ -48,6 +48,7 @@ export default function SettingsHeaderNavModules(props) {
     },
     docs: true,
     about: true,
+    game: true,
   });
 
   // 处理顶栏模块配置变更
@@ -88,6 +89,7 @@ export default function SettingsHeaderNavModules(props) {
       },
       docs: true,
       about: true,
+      game: true,
     };
     setHeaderNavModules(defaultModules);
     showSuccess(t('已重置为默认配置'));
@@ -142,6 +144,11 @@ export default function SettingsHeaderNavModules(props) {
           };
         }
 
+        // 旧配置没有 game 字段时默认显示游戏入口
+        if (typeof modules.game !== 'boolean') {
+          modules.game = true;
+        }
+
         setHeaderNavModules(modules);
       } catch (error) {
         // 使用默认配置
@@ -154,6 +161,7 @@ export default function SettingsHeaderNavModules(props) {
           },
           docs: true,
           about: true,
+          game: true,
         };
         setHeaderNavModules(defaultModules);
       }
@@ -187,6 +195,11 @@ export default function SettingsHeaderNavModules(props) {
       key: 'about',
       title: t('关于'),
       description: t('关于系统的详细信息'),
+    },
+    {
+      key: 'game',
+      title: t('游戏'),
+      description: t('休闲小游戏，记录本地排行榜'),
     },
   ];
 

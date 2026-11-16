@@ -482,12 +482,56 @@ export const getLogsColumns = ({
   openChannelAffinityUsageCacheModal,
   isAdminUser,
   billingDisplayMode = 'price',
+  openCollapsedMembers = () => {},
 }) => {
   return [
     {
       key: COLUMN_KEYS.TIME,
       title: t('时间'),
       dataIndex: 'timestamp2string',
+      render: (text, record) => {
+        const merged = record.collapsed_count || 0;
+        if (!merged) {
+          return text;
+        }
+        const ipCount = record.collapsed_ip_count || 1;
+        return (
+          // 标签换到第二行：和时间挤在一行会把「输入」列压到只剩几十像素，
+          // 缓存那行小字直接被裁断。
+          <div
+            style={{
+              display: 'inline-flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: 3,
+              lineHeight: 1.2,
+            }}
+          >
+            <span style={{ whiteSpace: 'nowrap' }}>{text}</span>
+            <Tooltip
+              content={t(
+                '这一行合并了 {{count}} 次调用，点击可查看每一次。',
+                { count: merged },
+              )}
+            >
+              <Tag
+                size='small'
+                color='grey'
+                className='!cursor-pointer !select-none'
+                style={{ fontSize: 11, lineHeight: '16px', padding: '0 6px' }}
+                onClick={(event) => {
+                  // 表格开启了点击行展开详情，这里不能连带触发
+                  event.stopPropagation();
+                  openCollapsedMembers(record);
+                }}
+              >
+                ×{merged}
+                {ipCount > 1 ? ` · ${ipCount} IP` : ''}
+              </Tag>
+            </Tooltip>
+          </div>
+        );
+      },
     },
     {
       key: COLUMN_KEYS.CHANNEL,

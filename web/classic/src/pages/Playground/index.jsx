@@ -437,6 +437,16 @@ const Playground = () => {
     setTimeout(() => saveMessagesImmediately([]), 0);
   }, [setMessage, saveMessagesImmediately]);
 
+  // 新对话的处理函数：先中断当前生成，再清空消息，开启一段全新对话
+  const handleNewChat = useCallback(() => {
+    if (sseSourceRef.current) {
+      sseSourceRef.current.close();
+      sseSourceRef.current = null;
+    }
+    setMessage([]);
+    saveMessagesImmediately([]);
+  }, [sseSourceRef, setMessage, saveMessagesImmediately]);
+
   // 处理粘贴图片
   const handlePasteImage = useCallback(
     (base64Data) => {
@@ -512,6 +522,7 @@ const Playground = () => {
                   onMessageDelete={messageActions.handleMessageDelete}
                   onStopGenerator={onStopGenerator}
                   onClearMessages={handleClearMessages}
+                  onNewChat={handleNewChat}
                   onToggleDebugPanel={() => setShowDebugPanel(!showDebugPanel)}
                   renderCustomChatContent={renderCustomChatContent}
                   renderChatBoxAction={renderChatBoxAction}

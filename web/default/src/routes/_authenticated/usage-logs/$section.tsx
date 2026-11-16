@@ -49,6 +49,9 @@ const usageLogsSearchSchema = z.object({
   upstreamRequestId: z.string().optional().catch(''),
   startTime: z.number().optional(),
   endTime: z.number().optional(),
+  // Folded view of repeated calls. Kept as a string flag so `?collapse=1` from a
+  // pasted URL validates the same way the toggle writes it.
+  collapse: z.enum(['0', '1']).optional().catch(undefined),
 })
 
 export const Route = createFileRoute('/_authenticated/usage-logs/$section')({

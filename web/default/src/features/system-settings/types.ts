@@ -376,6 +376,7 @@ export type SecuritySettings = {
   ChannelConcurrencyDefault: number
   CheckSensitiveEnabled: boolean
   CheckSensitiveOnPromptEnabled: boolean
+  SensitiveWordMatchMode: string
   SensitiveWords: string
   'fetch_setting.enable_ssrf_protection': boolean
   'fetch_setting.allow_private_ip': boolean

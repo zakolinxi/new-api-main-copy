@@ -17,9 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { API, processModelsData, processGroupsData } from '../../helpers';
+import {
+  API,
+  processModelsData,
+  processGroupsData,
+  showError,
+} from '../../helpers';
 import { API_ENDPOINTS } from '../../constants/playground.constants';
 
 export const useDataLoader = (
@@ -31,28 +36,53 @@ export const useDataLoader = (
 ) => {
   const { t } = useTranslation();
 
-  const loadModels = useCallback(async () => {
-    try {
-      const res = await API.get(API_ENDPOINTS.USER_MODELS);
-      const { success, message, data } = res.data;
+  // 用 ref 读取最新的模型/分组，避免数据加载回调随每次选择变化而重建
+  const modelRef = useRef(inputs.model);
+  const groupRef = useRef(inputs.group);
+  // 仅让最后一次模型请求生效，避免快速切换分组时旧响应覆盖新列表
+  const modelsRequestIdRef = useRef(0);
 
-      if (success) {
-        const { modelOptions, selectedModel } = processModelsData(
-          data,
-          inputs.model,
-        );
-        setModels(modelOptions);
+  useEffect(() => {
+    modelRef.current = inputs.model;
+  }, [inputs.model]);
 
-        if (selectedModel !== inputs.model) {
-          handleInputChange('model', selectedModel);
+  useEffect(() => {
+    groupRef.current = inputs.group;
+  }, [inputs.group]);
+
+  const loadModels = useCallback(
+    async (group) => {
+      const requestId = ++modelsRequestIdRef.current;
+      try {
+        const url = group
+          ? `${API_ENDPOINTS.USER_MODELS}?group=${encodeURIComponent(group)}`
+          : API_ENDPOINTS.USER_MODELS;
+        const res = await API.get(url);
+        const { success, message, data } = res.data;
+
+        if (requestId !== modelsRequestIdRef.current) return;
+
+        if (success) {
+          const { modelOptions, selectedModel } = processModelsData(
+            data,
+            modelRef.current,
+          );
+          setModels(modelOptions);
+
+          // 分组内没有当前模型时回退到该分组第一个可用模型
+          if (selectedModel && selectedModel !== modelRef.current) {
+            handleInputChange('model', selectedModel);
+          }
+        } else {
+          showError(t(message));
         }
-      } else {
-        showError(t(message));
+      } catch (error) {
+        if (requestId !== modelsRequestIdRef.current) return;
+        showError(t('加载模型失败'));
       }
-    } catch (error) {
-      showError(t('加载模型失败'));
-    }
-  }, [inputs.model, handleInputChange, setModels, t]);
+    },
+    [handleInputChange, setModels, t],
+  );
 
   const loadGroups = useCallback(async () => {
     try {
@@ -67,7 +97,7 @@ export const useDataLoader = (
         setGroups(groupOptions);
 
         const hasCurrentGroup = groupOptions.some(
-          (option) => option.value === inputs.group,
+          (option) => option.value === groupRef.current,
         );
         if (!hasCurrentGroup) {
           handleInputChange('group', groupOptions[0]?.value || '');
@@ -78,15 +108,21 @@ export const useDataLoader = (
     } catch (error) {
       showError(t('加载分组失败'));
     }
-  }, [userState, inputs.group, handleInputChange, setGroups, t]);
+  }, [userState, handleInputChange, setGroups, t]);
 
   // 自动加载数据
   useEffect(() => {
     if (userState?.user) {
-      loadModels();
       loadGroups();
     }
-  }, [userState?.user, loadModels, loadGroups]);
+  }, [userState?.user, loadGroups]);
+
+  // 分组变化时重新加载该分组可用的模型
+  useEffect(() => {
+    if (userState?.user) {
+      loadModels(inputs.group);
+    }
+  }, [userState?.user, inputs.group, loadModels]);
 
   return {
     loadModels,

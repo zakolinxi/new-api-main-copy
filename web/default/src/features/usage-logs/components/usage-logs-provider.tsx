@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, type ReactNode } from 'react'
+import type { UsageLog } from '../data/schema'
 import type { ChannelAffinityInfo } from '../types'
 
 interface UsageLogsContextValue {
@@ -31,6 +32,9 @@ interface UsageLogsContextValue {
   setAffinityDialogOpen: (open: boolean) => void
   sensitiveVisible: boolean
   setSensitiveVisible: (visible: boolean) => void
+  /** Row currently expanded from the folded view; null keeps the dialog closed. */
+  collapsedTarget: UsageLog | null
+  setCollapsedTarget: (log: UsageLog | null) => void
 }
 
 const UsageLogsContext = createContext<UsageLogsContextValue | undefined>(
@@ -44,6 +48,7 @@ export function UsageLogsProvider({ children }: { children: ReactNode }) {
     useState<ChannelAffinityInfo | null>(null)
   const [affinityDialogOpen, setAffinityDialogOpen] = useState(false)
   const [sensitiveVisible, setSensitiveVisible] = useState(true)
+  const [collapsedTarget, setCollapsedTarget] = useState<UsageLog | null>(null)
 
   return (
     <UsageLogsContext.Provider
@@ -58,6 +63,8 @@ export function UsageLogsProvider({ children }: { children: ReactNode }) {
         setAffinityDialogOpen,
         sensitiveVisible,
         setSensitiveVisible,
+        collapsedTarget,
+        setCollapsedTarget,
       }}
     >
       {children}

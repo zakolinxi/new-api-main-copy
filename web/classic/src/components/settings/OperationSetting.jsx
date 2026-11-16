@@ -62,6 +62,7 @@ const OperationSetting = () => {
     /* 敏感词设置 */
     CheckSensitiveEnabled: false,
     CheckSensitiveOnPromptEnabled: false,
+    SensitiveWordMatchMode: 'keyword',
     SensitiveWords: '',
 
     /* 日志设置 */

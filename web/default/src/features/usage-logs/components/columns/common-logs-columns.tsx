@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { CircleAlert, GitBranch, Sparkles, KeyRound } from 'lucide-react'
+import { CircleAlert, GitBranch, Layers, Sparkles, KeyRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
@@ -274,6 +274,7 @@ function buildDetailSegments(
 
 export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
   const { t } = useTranslation()
+  const { setCollapsedTarget } = useUsageLogsContext()
   const columns: ColumnDef<UsageLog>[] = [
     {
       accessorKey: 'created_at',
@@ -295,6 +296,37 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               copyable={false}
               className='!text-xs [&_span]:!text-xs'
             />
+            {!!log.collapsed_count && (
+              <div className='flex min-w-0 flex-wrap items-center gap-1'>
+                <button
+                  type='button'
+                  onClick={() => setCollapsedTarget(log)}
+                  title={t(
+                    '{{count}} calls merged. Click to see each one.',
+                    { count: log.collapsed_count }
+                  )}
+                  className='border-border/60 bg-muted/60 hover:bg-muted text-foreground focus-visible:ring-ring inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-none'
+                >
+                  <Layers className='size-3' />
+                  <span className='font-mono text-[11px] tabular-nums'>
+                    ×{log.collapsed_count}
+                  </span>
+                </button>
+                {log.ip && (
+                  <span
+                    className='text-muted-foreground/70 max-w-[104px] truncate font-mono text-[11px]'
+                    title={t('Latest IP · {{count}} distinct addresses', {
+                      count: log.collapsed_ip_count ?? 1,
+                    })}
+                  >
+                    {log.ip}
+                    {(log.collapsed_ip_count ?? 1) > 1
+                      ? ` +${(log.collapsed_ip_count ?? 1) - 1}`
+                      : ''}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )
       },

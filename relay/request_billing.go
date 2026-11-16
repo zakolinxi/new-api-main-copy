@@ -41,11 +41,18 @@ func PrepareRequestBilling(c *gin.Context, info *relaycommon.RelayInfo) *types.N
 	}
 
 	if needSensitiveCheck && meta != nil {
-		if contains, words := service.CheckSensitiveText(meta.CombineText); contains {
+		contains, words, checkErr := service.CheckSensitiveText(meta.CombineText)
+		if checkErr != nil {
+			// 文本超出过滤预算属于请求问题，不能按敏感词命中处理，否则会走到
+			// 违规扣费/封禁分支。
+			return types.NewError(checkErr, types.ErrorCodeInvalidRequest, types.ErrOptionWithStatusCode(http.StatusBadRequest))
+		}
+		if contains {
 			service.RequestPolicy(c).AddEvent(service.PolicyEvent{ErrorCode: string(types.ErrorCodeSensitiveWordsDetected), ErrorSource: "local", Decision: service.PolicyDecision{Action: "stop", Reason: "local_rejection", Source: "global"}, Health: "unchanged"})
-			message := fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", "))
-			logger.LogWarn(c, message)
-			return types.NewError(errors.New(message), types.ErrorCodeSensitiveWordsDetected)
+			// 命中的词只写入服务端日志。响应体只给通用文案，否则调用方可以逐词试探，
+			// 把屏蔽词表变成可枚举的 oracle（与 HTTP 中继路径的文案保持一致）。
+			logger.LogWarn(c, fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", ")))
+			return types.NewError(errors.New("Sensitive words detected"), types.ErrorCodeSensitiveWordsDetected)
 		}
 	}
 

@@ -43,6 +43,9 @@ import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
 import ParamOverrideEntry from '../../components/table/usage-logs/components/ParamOverrideEntry';
 
+// How many individual calls the expanded row shows at once.
+const COLLAPSED_MEMBERS_PAGE_SIZE = 50;
+
 export const useLogsData = () => {
   const { t } = useTranslation();
 
@@ -192,6 +195,31 @@ export const useLogsData = () => {
   // Request body debug modal state (P2-1, root-only API)
   const [showRequestBodyModal, setShowRequestBodyModal] = useState(false);
   const [requestBodyTarget, setRequestBodyTarget] = useState(null);
+
+  // Folded view: repeated calls of the same user against the same model are
+  // merged into one row that keeps accumulating tokens and quota. Opt-in, so
+  // the choice is remembered across visits.
+  const COLLAPSE_STORAGE_KEY = 'logs-collapse-view';
+  const [collapse, setCollapse] = useState(() => {
+    // A shared link should land in the folded view it was copied from, so the
+    // query parameter wins over the remembered preference.
+    const requested = new URLSearchParams(window.location.search).get(
+      'collapse',
+    );
+    if (requested === '1') {
+      return true;
+    }
+    if (requested === '0') {
+      return false;
+    }
+    return localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1';
+  });
+  const [showCollapsedModal, setShowCollapsedModal] = useState(false);
+  const [collapsedTarget, setCollapsedTarget] = useState(null);
+  const [collapsedMembers, setCollapsedMembers] = useState([]);
+  const [collapsedMembersTotal, setCollapsedMembersTotal] = useState(0);
+  const [collapsedMembersLoading, setCollapsedMembersLoading] =
+    useState(false);
 
   // Initialize default column visibility
   const initDefaultColumns = () => {
@@ -744,6 +772,21 @@ export const useLogsData = () => {
           });
         }
       }
+      // 折叠行上的「日志详情」是按单次倍率折算的，套到合并后的 token 上会给出
+      // 一个和「花费」列对不上的数字，所以换成一句说明；要看每次的账，点开明细。
+      if (logs[i].collapsed_count > 0) {
+        expandDataLocal = expandDataLocal.filter(
+          (item) => item.key !== t('日志详情'),
+        );
+        expandDataLocal.unshift({
+          key: t('合并说明'),
+          value: t(
+            '这一行合并了 {{count}} 次调用，额度为这 {{count}} 次之和，时间为最新一次。',
+            { count: logs[i].collapsed_count },
+          ),
+        });
+      }
+
       expandDatesLocal[logs[i].key] = expandDataLocal;
     }
 
@@ -752,7 +795,12 @@ export const useLogsData = () => {
   };
 
   // Load logs function
-  const loadLogs = async (startIdx, pageSize, customLogType = null) => {
+  const loadLogs = async (
+    startIdx,
+    pageSize,
+    customLogType = null,
+    collapseOverride = null,
+  ) => {
     setLoading(true);
 
     let url = '';
@@ -775,12 +823,18 @@ export const useLogsData = () => {
           ? formLogType
           : logType;
 
+    // The override exists because toggleCollapse already knows the next state
+    // while the setState it triggered has not been applied yet.
+    const collapseView =
+      collapseOverride === null ? collapse : collapseOverride;
+    const collapseParam = collapseView ? '&collapse=1' : '';
+
     let localStartTimestamp = Date.parse(start_timestamp) / 1000;
     let localEndTimestamp = Date.parse(end_timestamp) / 1000;
     if (isAdminUser) {
-      url = `/api/log/?p=${startIdx}&page_size=${pageSize}&type=${currentLogType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${group}&request_id=${request_id}`;
+      url = `/api/log/?p=${startIdx}&page_size=${pageSize}&type=${currentLogType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${group}&request_id=${request_id}${collapseParam}`;
     } else {
-      url = `/api/log/self/?p=${startIdx}&page_size=${pageSize}&type=${currentLogType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&group=${group}&request_id=${request_id}`;
+      url = `/api/log/self/?p=${startIdx}&page_size=${pageSize}&type=${currentLogType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&group=${group}&request_id=${request_id}${collapseParam}`;
     }
     url = encodeURI(url);
     const res = await API.get(url);
@@ -796,6 +850,69 @@ export const useLogsData = () => {
       showError(message);
     }
     setLoading(false);
+  };
+
+  // Switch between the folded and the per-call view.
+  const toggleCollapse = () => {
+    const next = !collapse;
+    setCollapse(next);
+    localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? '1' : '0');
+    setActivePage(1);
+    loadLogs(1, pageSize, null, next).catch((reason) => {
+      showError(reason);
+    });
+  };
+
+  // Expand a folded row: fetch the individual calls it summarises. The folds
+  // are computed from the same filters the list is using, so re-applying them
+  // here keeps the member list consistent with the aggregate.
+  const openCollapsedMembers = async (log) => {
+    if (!log || !log.collapsed_count) {
+      return;
+    }
+    setCollapsedTarget(log);
+    setShowCollapsedModal(true);
+    setCollapsedMembers([]);
+    setCollapsedMembersTotal(0);
+    setCollapsedMembersLoading(true);
+
+    try {
+      const { token_name, start_timestamp, end_timestamp, channel, group } =
+        getFormValues();
+      const localStartTimestamp = Date.parse(start_timestamp) / 1000;
+      const localEndTimestamp = Date.parse(end_timestamp) / 1000;
+      const modelName = encodeURIComponent(log.model_name || '');
+      const tokenName = encodeURIComponent(token_name || '');
+      const groupName = encodeURIComponent(group || '');
+
+      let url = '';
+      if (isAdminUser) {
+        const username = encodeURIComponent(log.username || '');
+        url = `/api/log/?p=1&page_size=${COLLAPSED_MEMBERS_PAGE_SIZE}&type=2&username=${username}&token_name=${tokenName}&model_name=${modelName}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${groupName}`;
+      } else {
+        url = `/api/log/self/?p=1&page_size=${COLLAPSED_MEMBERS_PAGE_SIZE}&type=2&token_name=${tokenName}&model_name=${modelName}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&group=${groupName}`;
+      }
+
+      const res = await API.get(encodeURI(url));
+      const { success, message, data } = res.data;
+      if (success) {
+        setCollapsedMembers(data.items || []);
+        setCollapsedMembersTotal(data.total || 0);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      showError(error);
+    } finally {
+      setCollapsedMembersLoading(false);
+    }
+  };
+
+  const closeCollapsedModal = () => {
+    setShowCollapsedModal(false);
+    setCollapsedTarget(null);
+    setCollapsedMembers([]);
+    setCollapsedMembersTotal(0);
   };
 
   // Page handlers
@@ -913,6 +1030,17 @@ export const useLogsData = () => {
     setShowRequestBodyModal,
     requestBodyTarget,
     openRequestBodyModal,
+
+    // Folded view
+    collapse,
+    toggleCollapse,
+    showCollapsedModal,
+    collapsedTarget,
+    collapsedMembers,
+    collapsedMembersTotal,
+    collapsedMembersLoading,
+    openCollapsedMembers,
+    closeCollapsedModal,
 
     // Functions
     loadLogs,

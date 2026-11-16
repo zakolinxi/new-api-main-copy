@@ -59,6 +59,7 @@ func requestPolicyDefaultOptions() map[string]string {
 	defaults["CheckSensitiveEnabled"] = strconv.FormatBool(setting.CheckSensitiveEnabled)
 	defaults["CheckSensitiveOnPromptEnabled"] = strconv.FormatBool(setting.CheckSensitiveOnPromptEnabled)
 	defaults["SensitiveWords"] = setting.SensitiveWordsToString()
+	defaults["SensitiveWordMatchMode"] = setting.SensitiveWordMatchModeToString()
 	defaults["AutomaticEnableChannelEnabled"] = strconv.FormatBool(common.AutomaticEnableChannelEnabled)
 	defaults["ChannelDisableThreshold"] = strconv.FormatFloat(common.ChannelDisableThreshold, 'f', -1, 64)
 	return defaults
@@ -69,7 +70,7 @@ func IsRequestPolicyOption(key string) bool {
 		return true
 	}
 	switch key {
-	case "CheckSensitiveEnabled", "CheckSensitiveOnPromptEnabled", "SensitiveWords", "AutomaticEnableChannelEnabled", "ChannelDisableThreshold", "monitor_setting.auto_test_channel_enabled", "monitor_setting.auto_test_channel_minutes", "monitor_setting.channel_test_concurrency", "monitor_setting.channel_test_mode", "RetryTimes", "AutomaticRetryStatusCodes", "AutomaticDisableChannelEnabled", "AutomaticDisableStatusCodes", "AutomaticDisableKeywords":
+	case "CheckSensitiveEnabled", "CheckSensitiveOnPromptEnabled", "SensitiveWords", "SensitiveWordMatchMode", "AutomaticEnableChannelEnabled", "ChannelDisableThreshold", "monitor_setting.auto_test_channel_enabled", "monitor_setting.auto_test_channel_minutes", "monitor_setting.channel_test_concurrency", "monitor_setting.channel_test_mode", "RetryTimes", "AutomaticRetryStatusCodes", "AutomaticDisableChannelEnabled", "AutomaticDisableStatusCodes", "AutomaticDisableKeywords":
 		return true
 	}
 	return false
@@ -149,6 +150,9 @@ func BuildRequestPolicy(options map[string]string) (*RequestPolicySnapshot, erro
 		}
 	}
 	snapshot.CheckText = raw["CheckSensitiveEnabled"] == "true" && raw["CheckSensitiveOnPromptEnabled"] == "true"
+	if _, err := setting.ParseSensitiveWordMatchMode(raw["SensitiveWordMatchMode"]); err != nil {
+		return nil, err
+	}
 	for word := range strings.SplitSeq(raw["SensitiveWords"], "\n") {
 		if word = strings.TrimSpace(word); word != "" {
 			snapshot.TextKeywords = append(snapshot.TextKeywords, word)
@@ -227,6 +231,11 @@ func UpdateRequestPolicyOptions(values map[string]string) error {
 	for key, value := range values {
 		if !IsRequestPolicyOption(key) {
 			return fmt.Errorf("not a request policy option: %s", key)
+		}
+		if key == "SensitiveWords" {
+			if err := setting.ValidateSensitiveWordsPayload(value); err != nil {
+				return err
+			}
 		}
 		options[key] = value
 	}

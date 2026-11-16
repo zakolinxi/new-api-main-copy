@@ -24,6 +24,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SectionPageLayout } from '@/components/layout'
 import type { NavGroup } from '@/components/layout/types'
 import { CacheStatsDialog } from '@/features/system-settings/general/channel-affinity/cache-stats-dialog'
+import { useIsAdmin } from '@/hooks/use-admin'
+import { CollapsedLogsDialog } from './components/dialogs/collapsed-logs-dialog'
 import { UserInfoDialog } from './components/dialogs/user-info-dialog'
 import {
   UsageLogsProvider,
@@ -66,7 +68,10 @@ function UsageLogsContent() {
     affinityTarget,
     affinityDialogOpen,
     setAffinityDialogOpen,
+    collapsedTarget,
+    setCollapsedTarget,
   } = useUsageLogsContext()
+  const isAdmin = useIsAdmin()
   const tabNavGroups = useMemo<NavGroup[]>(
     () => [
       {
@@ -138,6 +143,15 @@ function UsageLogsContent() {
         userId={selectedUserId}
         open={userInfoDialogOpen}
         onOpenChange={setUserInfoDialogOpen}
+      />
+
+      <CollapsedLogsDialog
+        log={collapsedTarget}
+        isAdmin={isAdmin}
+        open={collapsedTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setCollapsedTarget(null)
+        }}
       />
 
       <CacheStatsDialog

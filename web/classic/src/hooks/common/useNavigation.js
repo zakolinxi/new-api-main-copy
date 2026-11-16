@@ -30,12 +30,16 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
       modelHealth: true,
       docs: true,
       about: true,
+      game: true,
     };
 
     // 强制包含 modelHealth，确保它始终显示
-    const modules = headerNavModules && typeof headerNavModules === 'object' && Object.keys(headerNavModules).length > 0
-      ? { ...headerNavModules, modelHealth: true }  // 强制添加 modelHealth
-      : defaultModules;
+    const modules =
+      headerNavModules &&
+      typeof headerNavModules === 'object' &&
+      Object.keys(headerNavModules).length > 0
+        ? { ...headerNavModules, modelHealth: true } // 强制添加 modelHealth
+        : defaultModules;
 
     const allLinks = [
       {

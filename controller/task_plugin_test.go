@@ -490,7 +490,6 @@ export function parseTaskResult() { return {}; }
 		}
 		assert.Equal(t, jsplugin.LocalizedText{"en": "Video generation via the vendor API", "zh": "通过厂商接口生成视频"}, option.Description)
 		assert.Equal(t, "second", option.UsageSchema["seconds"].Unit)
-		assert.Equal(t, "Generated media duration.", option.UsageSchema["seconds"].Description["en"])
 		assert.Equal(t, "text:UO", option.Icon)
 		assert.Equal(t, "Video generation unit price", option.UsageSchema["seconds"].Description["en"])
 		require.Len(t, option.UsageProfiles, 1)
@@ -1342,7 +1341,6 @@ func TestUploadTaskPluginStoresSidecarIconAndServesIt(t *testing.T) {
 	assert.NotContains(t, accepted.Body.String(), "base64,", "icon bytes never travel inside detail JSON")
 	stored, err := model.GetTaskPluginVersion(key, "1.0.0")
 	require.NoError(t, err)
-	assert.Equal(t, svgIcon, stored.Icon)
 	assert.Equal(t, svgIcon, string(stored.Icon))
 
 	item := listTaskPluginItem(t, key)

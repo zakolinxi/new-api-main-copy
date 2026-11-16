@@ -289,6 +289,10 @@ export interface GetLogsParams {
   group?: string
   request_id?: string
   upstream_request_id?: string
+  /** 1 folds repeated calls of the same user to the same model into one row. */
+  collapse?: number
+  /** How many recent rows the folded view scans. */
+  collapse_scan?: number
 }
 
 export interface GetLogsResponse {

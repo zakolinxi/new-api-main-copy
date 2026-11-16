@@ -79,6 +79,12 @@ type Log struct {
 	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
 	Other             string `json:"other" gorm:"type:text"`
+
+	// Collapse metadata only exists on rows synthesised by CollapseLogs; a
+	// stored row never carries it, so GORM ignores these columns entirely.
+	CollapsedCount   int    `json:"collapsed_count,omitempty" gorm:"-"`
+	CollapsedIpCount int    `json:"collapsed_ip_count,omitempty" gorm:"-"`
+	CollapsedKey     string `json:"collapsed_key,omitempty" gorm:"-"`
 }
 
 // don't use iota, avoid change log type value
@@ -465,7 +471,17 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func logQueryOrder() string {
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		return clickHouseLogOrder("logs.")
+	}
+	return "logs.created_at desc, logs.id desc"
+}
+
+// buildAllLogsQuery assembles the filter chain shared by the plain listing and
+// the collapsed listing, so both always see the same row set.
+func buildAllLogsQuery(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string, requestId string, upstreamRequestId string) (*gorm.DB, error) {
+	var err error
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -474,10 +490,10 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 
 	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if tx, err = applyExplicitLogTextFilter(tx, "logs.username", username); err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if tokenName != "" {
 		tx = tx.Where("logs.token_name = ?", tokenName)
@@ -500,68 +516,83 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	if group != "" {
 		tx = tx.Where("logs."+logGroupCol+" = ?", group)
 	}
-	err = tx.Model(&Log{}).Count(&total).Error
-	if err != nil {
-		return nil, 0, err
-	}
-	order := "logs.created_at desc, logs.id desc"
-	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
-		order = clickHouseLogOrder("logs.")
-	}
-	err = tx.Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
-	if err != nil {
-		return nil, 0, err
-	}
-	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
-		assignDisplayLogIds(logs, startIdx)
-	}
+	return tx, nil
+}
 
+// attachChannelNames resolves channel_name for the loaded rows. The channel
+// catalogue lives in the main database, not the log database.
+func attachChannelNames(logs []*Log) error {
 	channelIds := types.NewSet[int]()
 	for _, log := range logs {
 		if log.ChannelId != 0 {
 			channelIds.Add(log.ChannelId)
 		}
 	}
-
-	if channelIds.Len() > 0 {
-		var channels []struct {
-			Id   int    `gorm:"column:id"`
-			Name string `gorm:"column:name"`
-		}
-		if common.MemoryCacheEnabled {
-			// Cache get channel
-			for _, channelId := range channelIds.Items() {
-				if cacheChannel, err := CacheGetChannel(channelId); err == nil {
-					channels = append(channels, struct {
-						Id   int    `gorm:"column:id"`
-						Name string `gorm:"column:name"`
-					}{
-						Id:   channelId,
-						Name: cacheChannel.Name,
-					})
-				}
-			}
-		} else {
-			// Bulk query channels from DB
-			if err = DB.Table("channels").Select("id, name").Where("id IN ?", channelIds.Items()).Find(&channels).Error; err != nil {
-				return logs, total, err
-			}
-		}
-		channelMap := make(map[int]string, len(channels))
-		for _, channel := range channels {
-			channelMap[channel.Id] = channel.Name
-		}
-		for i := range logs {
-			logs[i].ChannelName = channelMap[logs[i].ChannelId]
-		}
+	if channelIds.Len() == 0 {
+		return nil
 	}
 
-	return logs, total, err
+	var channels []struct {
+		Id   int    `gorm:"column:id"`
+		Name string `gorm:"column:name"`
+	}
+	if common.MemoryCacheEnabled {
+		// Cache get channel
+		for _, channelId := range channelIds.Items() {
+			if cacheChannel, err := CacheGetChannel(channelId); err == nil {
+				channels = append(channels, struct {
+					Id   int    `gorm:"column:id"`
+					Name string `gorm:"column:name"`
+				}{
+					Id:   channelId,
+					Name: cacheChannel.Name,
+				})
+			}
+		}
+	} else {
+		// Bulk query channels from DB
+		if err := DB.Table("channels").Select("id, name").Where("id IN ?", channelIds.Items()).Find(&channels).Error; err != nil {
+			return err
+		}
+	}
+	channelMap := make(map[int]string, len(channels))
+	for _, channel := range channels {
+		channelMap[channel.Id] = channel.Name
+	}
+	for i := range logs {
+		logs[i].ChannelName = channelMap[logs[i].ChannelId]
+	}
+	return nil
+}
+
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+	tx, err := buildAllLogsQuery(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group, requestId, upstreamRequestId)
+	if err != nil {
+		return nil, 0, err
+	}
+	err = tx.Model(&Log{}).Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	err = tx.Order(logQueryOrder()).Limit(num).Offset(startIdx).Find(&logs).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		assignDisplayLogIds(logs, startIdx)
+	}
+	if err = attachChannelNames(logs); err != nil {
+		return logs, total, err
+	}
+
+	return logs, total, nil
 }
 
 const logSearchCountLimit = 10000
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+// buildUserLogsQuery mirrors buildAllLogsQuery for the self-service listing.
+func buildUserLogsQuery(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, group string, requestId string, upstreamRequestId string) (*gorm.DB, error) {
+	var err error
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -570,7 +601,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 
 	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if tokenName != "" {
 		tx = tx.Where("logs.token_name = ?", tokenName)
@@ -589,6 +620,14 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 	if group != "" {
 		tx = tx.Where("logs."+logGroupCol+" = ?", group)
+	}
+	return tx, nil
+}
+
+func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+	tx, err := buildUserLogsQuery(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, group, requestId, upstreamRequestId)
+	if err != nil {
+		return nil, 0, err
 	}
 	err = tx.Model(&Log{}).Limit(logSearchCountLimit).Count(&total).Error
 	if err != nil {

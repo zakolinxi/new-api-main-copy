@@ -361,7 +361,13 @@ export function UsageLogsMobileList<TData>({
         const logType = (row.original as Record<string, unknown>).type as
           | number
           | undefined
-        const tintClass = logType != null ? (logTypeRowTint[logType] ?? '') : ''
+        const isCollapsed =
+          (row.original as Record<string, unknown>).collapsed_count != null
+        const tintClass = isCollapsed
+          ? 'bg-muted/50 dark:bg-muted/25'
+          : logType != null
+            ? (logTypeRowTint[logType] ?? '')
+            : ''
 
         return (
           <div

@@ -1191,7 +1191,11 @@ func UpdateChannel(c *gin.Context) {
 	// Decode a second time over the complete persisted row. This preserves the
 	// legacy sparse PATCH contract while the domain service uses explicit maps
 	// that correctly persist provided zero values.
-	channel := PatchChannel{Channel: *originChannel}
+	//
+	// The patch base must be a deep copy: json decoding writes through non-nil
+	// pointers, so decoding over a shallow copy would mutate originChannel and
+	// turn every origin-vs-patch comparison below into a pointer self-compare.
+	channel := PatchChannel{Channel: *originChannel.DeepCopy()}
 	if err := common.Unmarshal(rawBody, &channel); err != nil {
 		common.ApiError(c, err)
 		return

@@ -34,6 +34,7 @@ export default function SettingsSensitiveWords(props) {
   const [inputs, setInputs] = useState({
     CheckSensitiveEnabled: false,
     CheckSensitiveOnPromptEnabled: false,
+    SensitiveWordMatchMode: 'keyword',
     SensitiveWords: '',
   });
   const refForm = useRef();
@@ -121,6 +122,35 @@ export default function SettingsSensitiveWords(props) {
                     setInputs({
                       ...inputs,
                       CheckSensitiveOnPromptEnabled: value,
+                    })
+                  }
+                />
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Select
+                  field={'SensitiveWordMatchMode'}
+                  label={t('匹配方式')}
+                  extraText={
+                    <>
+                      {t(
+                        '关键词匹配：文本中出现任意屏蔽词即拦截；全匹配：整段文本与屏蔽词完全一致才拦截',
+                      )}
+                      <br />
+                      {t(
+                        '注意：全匹配比关键词匹配更宽松，文本多出任何内容即放行',
+                      )}
+                    </>
+                  }
+                  optionList={[
+                    { label: t('关键词匹配（包含即拦截）'), value: 'keyword' },
+                    { label: t('全匹配（整段一致才拦截）'), value: 'full' },
+                  ]}
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      SensitiveWordMatchMode: value,
                     })
                   }
                 />

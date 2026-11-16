@@ -49,14 +49,14 @@ func MigrateRetiredFrontendOptions() error {
 
 // normalizeRetiredThemeOption keeps the frontend theme option on a value this
 // deployment can actually serve. Both dashboards are still embedded and served
-// through common.NewThemeAwareFS, so "classic" must survive a restart; only
-// unsupported values fall back to "default".
+// through common.NewThemeAwareFS, so "classic" must survive a restart; unsupported
+// values fall back to the deployment default, which is the classic dashboard.
 func normalizeRetiredThemeOption() error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var option Option
 		err := tx.Where(&Option{Key: retiredThemeOptionKey}).First(&option).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return tx.Create(&Option{Key: retiredThemeOptionKey, Value: "default"}).Error
+			return tx.Create(&Option{Key: retiredThemeOptionKey, Value: "classic"}).Error
 		}
 		if err != nil {
 			return err
@@ -64,7 +64,7 @@ func normalizeRetiredThemeOption() error {
 		if option.Value == "default" || option.Value == "classic" {
 			return nil
 		}
-		return tx.Model(&option).Update("value", "default").Error
+		return tx.Model(&option).Update("value", "classic").Error
 	})
 }
 

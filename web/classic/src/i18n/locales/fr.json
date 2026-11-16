@@ -3390,6 +3390,7 @@
     "新建数量": "Nouvelle quantité",
     "新建套餐": "Créer un plan",
     "新建组": "Nouveau groupe",
+    "新对话": "Nouvelle conversation",
     "新密码": "Nouveau mot de passe",
     "新密码需要和原密码不一致！": "Le nouveau mot de passe doit être différent de l'ancien mot de passe !",
     "新用户初始额度": "Quota initial pour les nouveaux utilisateurs",
@@ -3426,6 +3427,7 @@
     "修改子渠道权重": "Modifier le poids du sous-canal",
     "修改子渠道优先级": "Modifier la priorité du sous-canal",
     "修理镐子（50分）": "",
+    "休闲小游戏，记录本地排行榜": "Mini-jeux décontractés avec classements locaux",
     "需手动": "",
     "需要安全验证": "Vérification de sécurité requise",
     "需要登录访问": "Nécessite une connexion",
@@ -4680,6 +4682,18 @@
     "余额支付将优先消耗赠送余额，再消耗充值余额": "Le paiement par solde consomme d'abord le solde offert, puis le solde rechargé.",
     "该套餐未开启任何可用付款方式，请联系管理员。": "Ce forfait n'a aucun moyen de paiement disponible. Veuillez contacter l'administrateur.",
     "订阅购买成功": "Abonnement acheté avec succès",
-    "充值余额": "Solde rechargé"
+    "充值余额": "Solde rechargé",
+    "合并调用明细": "Détails des appels fusionnés",
+    "没有可显示的单次调用记录": "Aucun appel individuel à afficher",
+    "合并视图": "Vue fusionnée",
+    "合并重复调用": "Fusionner les appels répétés",
+    "当前是合并视图，点击可看每一次调用": "Vue fusionnée active. Cliquez pour voir chaque appel.",
+    "同一用户对同一模型的重复调用合并成一行": "Les appels répétés d'un même utilisateur vers un même modèle sont fusionnés en une seule ligne",
+    "首字延迟": "Premier jeton",
+    "缓存": "Cache",
+    "这一行合并了 {{merged}} 次调用，下面列出最近 {{shown}} 条。": "Cette ligne fusionne {{merged}} appels. Les {{shown}} plus récents sont listés ci-dessous.",
+    "共 {{total}} 条，仅展示最近 {{shown}} 条。": "{{total}} au total, affichage des {{shown}} plus récents.",
+    "这一行合并了 {{count}} 次调用，点击可查看每一次。": "Cette ligne fusionne {{count}} appels. Cliquez pour voir chacun d'eux.",
+    "合并说明": "Note de fusion"
   }
 }

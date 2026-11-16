@@ -30,7 +30,7 @@ func TestUpdateOptionRejectsInvalidFrontendTheme(t *testing.T) {
 	assert.JSONEq(t, `{"success":false,"message":"无效的主题值，可选值：default（新版前端）、classic（经典前端）"}`, response.Body.String())
 }
 
-func TestGetStatusAdvertisesDefaultDashboard(t *testing.T) {
+func TestGetStatusAdvertisesClassicDashboard(t *testing.T) {
 	previousMap := common.OptionMap
 	common.OptionMap = map[string]string{}
 	t.Cleanup(func() { common.OptionMap = previousMap })
@@ -46,7 +46,7 @@ func TestGetStatusAdvertisesDefaultDashboard(t *testing.T) {
 	}
 	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &payload))
 	assert.True(t, payload.Success)
-	assert.Equal(t, "default", payload.Data["theme"])
+	assert.Equal(t, "classic", payload.Data["theme"])
 	require.NotNil(t, payload.Data["default_theme"])
 }
 

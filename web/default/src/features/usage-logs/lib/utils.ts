@@ -215,6 +215,9 @@ export function buildApiParams(config: {
     ...(searchParams.upstreamRequestId
       ? { upstream_request_id: String(searchParams.upstreamRequestId) }
       : {}),
+    // Folded view is a display mode, so it rides on the same request instead of
+    // a separate endpoint; the server folds before paginating.
+    ...(searchParams.collapse === '1' ? { collapse: 1 } : {}),
     ...buildTimeRangeParams(searchParams, false),
   }
 

@@ -54,7 +54,7 @@ func TestMigrateRetiredFrontendOptionsMigratesValidValuesIdempotently(t *testing
 	require.NoError(t, db.Create(&legacy).Error)
 
 	require.NoError(t, MigrateRetiredFrontendOptions())
-	assert.Equal(t, "default", requireOptionValue(t, db, retiredThemeOptionKey))
+	assert.Equal(t, "classic", requireOptionValue(t, db, retiredThemeOptionKey))
 	assert.JSONEq(t, legacy[1].Value, requireOptionValue(t, db, "console_setting.api_info"))
 	assert.Equal(t, legacy[2].Value, requireOptionValue(t, db, "console_setting.announcements"))
 	assert.JSONEq(t, `[{"question":"Question","answer":"Answer"}]`, requireOptionValue(t, db, "console_setting.faq"))
@@ -177,7 +177,7 @@ func TestRetiredThemeOptionKeepsClassicAndRejectsUnknownValues(t *testing.T) {
 
 	require.NoError(t, db.Model(&Option{}).Where(&Option{Key: retiredThemeOptionKey}).Update("value", "sepia").Error)
 	require.NoError(t, MigrateRetiredFrontendOptions())
-	assert.Equal(t, "default", requireOptionValue(t, db, retiredThemeOptionKey))
+	assert.Equal(t, "classic", requireOptionValue(t, db, retiredThemeOptionKey))
 }
 
 func TestFrontendThemeOptionPublishesAndActivatesClassicTheme(t *testing.T) {
@@ -185,8 +185,8 @@ func TestFrontendThemeOptionPublishesAndActivatesClassicTheme(t *testing.T) {
 	previousMap := common.OptionMap
 	t.Cleanup(func() {
 		common.OptionMap = previousMap
-		system_setting.GetThemeSettings().Frontend = "default"
-		common.SetTheme("default")
+		system_setting.GetThemeSettings().Frontend = "classic"
+		common.SetTheme("classic")
 	})
 	common.OptionMap = map[string]string{}
 

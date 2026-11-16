@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button, Form } from '@douyinfe/semi-ui';
-import { IconSearch } from '@douyinfe/semi-icons';
+import { Button, Form, Tooltip } from '@douyinfe/semi-ui';
+import { IconLayers, IconSearch } from '@douyinfe/semi-icons';
 
 import { DATE_RANGE_PRESETS } from '../../../constants/console.constants';
 
@@ -32,6 +32,8 @@ const LogsFilters = ({
   setLogType,
   loading,
   isAdminUser,
+  collapse,
+  toggleCollapse,
   t,
 }) => {
   return (
@@ -152,6 +154,23 @@ const LogsFilters = ({
           </div>
 
           <div className='flex gap-2 w-full sm:w-auto justify-end'>
+            <Tooltip
+              content={
+                collapse
+                  ? t('当前是合并视图，点击可看每一次调用')
+                  : t('同一用户对同一模型的重复调用合并成一行')
+              }
+            >
+              <Button
+                type={collapse ? 'primary' : 'tertiary'}
+                theme={collapse ? 'solid' : 'light'}
+                icon={<IconLayers />}
+                onClick={toggleCollapse}
+                size='small'
+              >
+                {collapse ? t('合并视图') : t('合并重复调用')}
+              </Button>
+            </Tooltip>
             <Button
               type='tertiary'
               htmlType='submit'

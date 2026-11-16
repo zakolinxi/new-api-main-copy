@@ -27,6 +27,7 @@ import UserInfoModal from './modals/UserInfoModal';
 import ChannelAffinityUsageCacheModal from './modals/ChannelAffinityUsageCacheModal';
 import ParamOverrideModal from './modals/ParamOverrideModal';
 import RequestBodyModal from './modals/RequestBodyModal';
+import CollapsedMembersModal from './modals/CollapsedMembersModal';
 import { useLogsData } from '../../../hooks/usage-logs/useUsageLogsData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -43,6 +44,15 @@ const LogsPage = () => {
       <ChannelAffinityUsageCacheModal {...logsData} />
       <ParamOverrideModal {...logsData} />
       <RequestBodyModal {...logsData} />
+      <CollapsedMembersModal
+        visible={logsData.showCollapsedModal}
+        onCancel={logsData.closeCollapsedModal}
+        target={logsData.collapsedTarget}
+        members={logsData.collapsedMembers}
+        total={logsData.collapsedMembersTotal}
+        loading={logsData.collapsedMembersLoading}
+        t={logsData.t}
+      />
 
       {/* Main Content */}
       <CardPro

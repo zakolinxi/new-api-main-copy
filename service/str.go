@@ -70,7 +70,40 @@ func InitAc(dict []string) *goahocorasick.Machine {
 	return m
 }
 
-var acCache sync.Map
+var acCache = newBoundedCache[*goahocorasick.Machine](32)
+
+// boundedCache 是一个带条目上限的并发缓存。缓存内容都可以由词表重建，
+// 所以超过上限时整表清空只影响性能，不影响正确性；这样词表被反复修改时
+// 不会再留下永不释放的 AC 自动机。
+type boundedCache[V any] struct {
+	mu    sync.RWMutex
+	items map[string]V
+	limit int
+}
+
+func newBoundedCache[V any](limit int) *boundedCache[V] {
+	return &boundedCache[V]{items: make(map[string]V), limit: limit}
+}
+
+func (c *boundedCache[V]) Load(key string) (V, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	value, ok := c.items[key]
+	return value, ok
+}
+
+func (c *boundedCache[V]) LoadOrStore(key string, value V) (V, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if cached, ok := c.items[key]; ok {
+		return cached, true
+	}
+	if len(c.items) >= c.limit {
+		c.items = make(map[string]V, c.limit)
+	}
+	c.items[key] = value
+	return value, false
+}
 
 func acKey(dict []string) string {
 	if len(dict) == 0 {
@@ -100,19 +133,15 @@ func getOrBuildAC(dict []string) *goahocorasick.Machine {
 	if key == "" {
 		return nil
 	}
-	if v, ok := acCache.Load(key); ok {
-		if m, ok2 := v.(*goahocorasick.Machine); ok2 {
-			return m
-		}
+	if m, ok := acCache.Load(key); ok {
+		return m
 	}
 	m := InitAc(dict)
 	if m == nil {
 		return nil
 	}
-	if actual, loaded := acCache.LoadOrStore(key, m); loaded {
-		if cached, ok := actual.(*goahocorasick.Machine); ok {
-			return cached
-		}
+	if cached, loaded := acCache.LoadOrStore(key, m); loaded {
+		return cached
 	}
 	return m
 }

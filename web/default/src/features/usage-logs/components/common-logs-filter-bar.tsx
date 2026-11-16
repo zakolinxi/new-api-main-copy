@@ -20,7 +20,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 import { useNavigate, getRouteApi } from '@tanstack/react-router'
 import type { Table } from '@tanstack/react-table'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Layers } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useIsAdmin } from '@/hooks/use-admin'
 import { Button } from '@/components/ui/button'
@@ -118,6 +118,7 @@ export function CommonLogsFilterBar<TData>(
   const isAdmin = useIsAdmin()
   const { sensitiveVisible, setSensitiveVisible } = useUsageLogsContext()
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
+  const collapseEnabled = searchParams.collapse === '1'
 
   const searchState = useMemo<CommonLogDraft>(() => {
     const { start, end } = getDefaultTimeRange()
@@ -193,11 +194,13 @@ export function CommonLogsFilterBar<TData>(
         ...filterParams,
         type: [logType],
         page: 1,
+        // Keep the folded view when the user re-runs a filter.
+        collapse: collapseEnabled ? '1' : undefined,
       },
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
-  }, [filters, logType, navigate, queryClient])
+  }, [filters, logType, navigate, queryClient, collapseEnabled])
 
   const handleReset = useCallback(() => {
     const { start, end } = getDefaultTimeRange()
@@ -284,6 +287,43 @@ export function CommonLogsFilterBar<TData>(
       </TooltipTrigger>
       <TooltipContent>
         {sensitiveVisible ? t('Hide') : t('Show')}
+      </TooltipContent>
+    </Tooltip>
+  )
+  const collapseToggle = (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant='ghost'
+            size='icon'
+            aria-pressed={collapseEnabled}
+            aria-label={
+              collapseEnabled ? t('Show every call') : t('Merge repeated calls')
+            }
+            onClick={() => {
+              navigate({
+                to: '/usage-logs/$section',
+                params: { section: 'common' },
+                search: {
+                  ...searchParams,
+                  collapse: collapseEnabled ? undefined : '1',
+                  page: 1,
+                },
+              })
+            }}
+            className={
+              collapseEnabled
+                ? 'text-primary size-7'
+                : 'text-muted-foreground hover:text-foreground size-7'
+            }
+          />
+        }
+      >
+        <Layers />
+      </TooltipTrigger>
+      <TooltipContent>
+        {collapseEnabled ? t('Show every call') : t('Merge repeated calls')}
       </TooltipContent>
     </Tooltip>
   )
@@ -412,7 +452,12 @@ export function CommonLogsFilterBar<TData>(
     <LogsFilterToolbar
       table={props.table}
       stats={statsBar}
-      actionStart={sensitiveToggle}
+      actionStart={
+        <>
+          {collapseToggle}
+          {sensitiveToggle}
+        </>
+      }
       primaryFilters={
         <>
           {dateRangeFilter}

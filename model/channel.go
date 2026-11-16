@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"math/rand"
 	"strings"
 	"sync"
@@ -1261,18 +1262,21 @@ func (channel *Channel) hasModel(model string) bool {
 	return false
 }
 
+// GetSetting decodes the channel's extra settings.
+//
+// It is a pure read: a malformed value is reported once and decoded as the zero
+// value. It must not rewrite the column. Callers reach this on every relay
+// request, so an earlier version that cleared the stored setting on a decode
+// error silently destroyed administrator configuration (proxy, plugin
+// bindings, system prompt) the first time a legacy or hand-edited row was read.
 func (channel *Channel) GetSetting() dto.ChannelSettings {
 	setting := dto.ChannelSettings{}
-	if channel.Setting != nil && *channel.Setting != "" {
-		err := common.Unmarshal([]byte(*channel.Setting), &setting)
-		if err != nil {
-			common.SysLog(fmt.Sprintf("failed to unmarshal setting: channel_id=%d, error=%v", channel.Id, err))
-			oldSetting := *channel.Setting
-			channel.Setting = nil // 清空设置以避免后续错误
-			if channel.Id != 0 {
-				_ = DB.Model(&Channel{}).Where("id = ? AND setting = ?", channel.Id, oldSetting).Update("setting", nil).Error
-			}
-		}
+	if channel.Setting == nil || *channel.Setting == "" {
+		return setting
+	}
+	if err := common.Unmarshal([]byte(*channel.Setting), &setting); err != nil {
+		warnCorruptedChannelSetting(channel, "setting", *channel.Setting, err)
+		return dto.ChannelSettings{}
 	}
 	return setting
 }
@@ -1286,17 +1290,84 @@ func (channel *Channel) SetSetting(setting dto.ChannelSettings) {
 	channel.Setting = common.GetPointer[string](string(settingBytes))
 }
 
+// DeepCopy returns a copy of the channel that shares no pointer, map, or slice
+// storage with the receiver.
+//
+// It exists because the sparse PATCH update path builds the patch base as a
+// struct copy of the persisted row and then decodes the request body over it.
+// JSON decoding writes through non-nil pointers instead of reallocating them,
+// so a plain `*origin` copy would silently overwrite the origin snapshot that
+// the same request is compared against. That aliasing defeated every
+// old-vs-new comparison in channelHasSensitiveChanges and the task plugin
+// binding check, letting an administrator without channel_sensitive_write
+// rewrite setting/base_url/header_override/param_override undetected.
+//
+// Any newly added pointer, map, or slice field must be cloned here as well;
+// TestChannelDeepCopyDoesNotAliasSharedStorage guards the invariant by
+// reflection.
+func (channel *Channel) DeepCopy() *Channel {
+	if channel == nil {
+		return nil
+	}
+	cloned := *channel
+	cloned.OpenAIOrganization = clonePointer(channel.OpenAIOrganization)
+	cloned.TestModel = clonePointer(channel.TestModel)
+	cloned.Weight = clonePointer(channel.Weight)
+	cloned.BaseURL = clonePointer(channel.BaseURL)
+	cloned.ModelMapping = clonePointer(channel.ModelMapping)
+	cloned.StatusCodeMapping = clonePointer(channel.StatusCodeMapping)
+	cloned.Priority = clonePointer(channel.Priority)
+	cloned.Concurrency = clonePointer(channel.Concurrency)
+	cloned.AutoBan = clonePointer(channel.AutoBan)
+	cloned.Tag = clonePointer(channel.Tag)
+	cloned.Setting = clonePointer(channel.Setting)
+	cloned.ParamOverride = clonePointer(channel.ParamOverride)
+	cloned.HeaderOverride = clonePointer(channel.HeaderOverride)
+	cloned.Remark = clonePointer(channel.Remark)
+	if channel.Keys != nil {
+		cloned.Keys = append(make([]string, 0, len(channel.Keys)), channel.Keys...)
+	}
+	cloned.ChannelInfo = channel.ChannelInfo.DeepCopy()
+	return &cloned
+}
+
+func clonePointer[T any](value *T) *T {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+// DeepCopy returns a copy of the channel info that owns its maps, so callers
+// can mutate the copy without corrupting the row they copied from.
+func (info ChannelInfo) DeepCopy() ChannelInfo {
+	cloned := info
+	cloned.MultiKeyStatusList = cloneMap(info.MultiKeyStatusList)
+	cloned.MultiKeyDisabledReason = cloneMap(info.MultiKeyDisabledReason)
+	cloned.MultiKeyDisabledTime = cloneMap(info.MultiKeyDisabledTime)
+	return cloned
+}
+
+func cloneMap[K comparable, V any](source map[K]V) map[K]V {
+	if source == nil {
+		return nil
+	}
+	cloned := make(map[K]V, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+// GetOtherSettings decodes the channel's auxiliary settings. Like GetSetting it
+// is a pure read and never rewrites the stored value on a decode error.
 func (channel *Channel) GetOtherSettings() dto.ChannelOtherSettings {
 	setting := dto.ChannelOtherSettings{}
 	if channel.OtherSettings != "" {
-		err := common.UnmarshalJsonStr(channel.OtherSettings, &setting)
-		if err != nil {
-			common.SysLog(fmt.Sprintf("failed to unmarshal setting: channel_id=%d, error=%v", channel.Id, err))
-			oldSettings := channel.OtherSettings
-			channel.OtherSettings = "{}" // 清空设置以避免后续错误
-			if channel.Id != 0 {
-				_ = DB.Model(&Channel{}).Where("id = ? AND settings = ?", channel.Id, oldSettings).Update("settings", channel.OtherSettings).Error
-			}
+		if err := common.UnmarshalJsonStr(channel.OtherSettings, &setting); err != nil {
+			warnCorruptedChannelSetting(channel, "settings", channel.OtherSettings, err)
+			setting = dto.ChannelOtherSettings{}
 		}
 	}
 	if preset := common.GetAdvancedCustomPreset(channel.Type); preset != nil {
@@ -1304,6 +1375,37 @@ func (channel *Channel) GetOtherSettings() dto.ChannelOtherSettings {
 	}
 	return setting
 }
+
+// warnCorruptedChannelSetting reports an undecodable setting value once per
+// distinct (channel, field, value). Reads happen on the relay hot path, so an
+// unconditional log line would flood stdout and the log file for as long as the
+// bad row exists.
+func warnCorruptedChannelSetting(channel *Channel, field string, raw string, err error) {
+	hasher := fnv.New64a()
+	fmt.Fprintf(hasher, "%s\x00%d\x00%s", field, channel.Id, raw)
+	digest := hasher.Sum64()
+
+	corruptedSettingAlerts.mu.Lock()
+	_, reported := corruptedSettingAlerts.seen[digest]
+	if !reported {
+		if len(corruptedSettingAlerts.seen) >= corruptedSettingAlertLimit {
+			corruptedSettingAlerts.seen = make(map[uint64]struct{}, corruptedSettingAlertLimit)
+		}
+		corruptedSettingAlerts.seen[digest] = struct{}{}
+	}
+	corruptedSettingAlerts.mu.Unlock()
+	if reported {
+		return
+	}
+	common.SysLog(fmt.Sprintf("failed to unmarshal channel %s: channel_id=%d, error=%v", field, channel.Id, err))
+}
+
+const corruptedSettingAlertLimit = 256
+
+var corruptedSettingAlerts = struct {
+	mu   sync.Mutex
+	seen map[uint64]struct{}
+}{seen: make(map[uint64]struct{}, corruptedSettingAlertLimit)}
 
 func (channel *Channel) SetOtherSettings(setting dto.ChannelOtherSettings) {
 	settingBytes, err := common.Marshal(setting)

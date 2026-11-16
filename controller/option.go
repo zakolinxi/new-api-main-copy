@@ -326,6 +326,13 @@ func UpdateOption(c *gin.Context) {
 		}
 	case setting.UserRequestRateLimitDefaultOptionKey:
 		err = setting.ValidateUserRequestRateLimitDefault(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
 	case setting.ChannelConcurrencyDefaultOptionKey:
 		err = setting.ValidateChannelConcurrencyDefault(option.Value.(string))
 		if err != nil {

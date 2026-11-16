@@ -12,6 +12,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// wantsCollapsedLogs reports whether the caller asked for the folded view. The
+// folded view answers "who keeps calling this model", so it is opt-in.
+func wantsCollapsedLogs(c *gin.Context) (bool, int) {
+	switch strings.ToLower(c.Query("collapse")) {
+	case "1", "true", "yes", "on":
+	default:
+		return false, 0
+	}
+	scanLimit, _ := strconv.Atoi(c.Query("collapse_scan"))
+	return true, model.NormalizeLogCollapseScanLimit(scanLimit)
+}
+
 func GetAllLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	logType, _ := strconv.Atoi(c.Query("type"))
@@ -24,7 +36,15 @@ func GetAllLogs(c *gin.Context) {
 	group := c.Query("group")
 	requestId := c.Query("request_id")
 	upstreamRequestId := c.Query("upstream_request_id")
-	logs, total, err := model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), channel, group, requestId, upstreamRequestId)
+	collapse, scanLimit := wantsCollapsedLogs(c)
+	var logs []*model.Log
+	var total int64
+	var err error
+	if collapse {
+		logs, total, err = model.GetAllLogsCollapsed(logType, startTimestamp, endTimestamp, modelName, username, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), channel, group, requestId, upstreamRequestId, scanLimit)
+	} else {
+		logs, total, err = model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), channel, group, requestId, upstreamRequestId)
+	}
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -51,7 +71,15 @@ func GetUserLogs(c *gin.Context) {
 	group := c.Query("group")
 	requestId := c.Query("request_id")
 	upstreamRequestId := c.Query("upstream_request_id")
-	logs, total, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, upstreamRequestId)
+	collapse, scanLimit := wantsCollapsedLogs(c)
+	var logs []*model.Log
+	var total int64
+	var err error
+	if collapse {
+		logs, total, err = model.GetUserLogsCollapsed(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, upstreamRequestId, scanLimit)
+	} else {
+		logs, total, err = model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, upstreamRequestId)
+	}
 	if err != nil {
 		common.ApiError(c, err)
 		return

@@ -44,6 +44,7 @@ const LogsTable = (logsData) => {
     hasExpandableRows,
     isAdminUser,
     billingDisplayMode,
+    openCollapsedMembers,
     t,
     COLUMN_KEYS,
   } = logsData;
@@ -58,6 +59,7 @@ const LogsTable = (logsData) => {
       openChannelAffinityUsageCacheModal,
       isAdminUser,
       billingDisplayMode,
+      openCollapsedMembers,
     });
   }, [
     t,
@@ -67,6 +69,7 @@ const LogsTable = (logsData) => {
     openChannelAffinityUsageCacheModal,
     isAdminUser,
     billingDisplayMode,
+    openCollapsedMembers,
   ]);
 
   // Filter columns based on visibility settings
@@ -99,6 +102,9 @@ const LogsTable = (logsData) => {
       })}
       dataSource={logs}
       rowKey='key'
+      rowClassName={(record) =>
+        record.collapsed_count ? 'logs-collapsed-row' : undefined
+      }
       loading={loading}
       scroll={compactMode ? undefined : { x: 'max-content' }}
       className='rounded-xl overflow-hidden'
