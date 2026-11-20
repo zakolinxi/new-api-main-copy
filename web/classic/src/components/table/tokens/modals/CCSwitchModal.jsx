@@ -28,6 +28,7 @@ import {
 } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 import { selectFilter } from '../../../../helpers';
+import { withTokenKeyPrefix } from '../../../../helpers/token';
 
 const APP_CONFIGS = {
   claude: {
@@ -116,7 +117,7 @@ export default function CCSwitchModal({
       Toast.warning(t('请选择主模型'));
       return;
     }
-    const url = buildCCSwitchURL(app, name, models, 'sk-' + tokenKey);
+    const url = buildCCSwitchURL(app, name, models, withTokenKeyPrefix(tokenKey));
     window.open(url, '_blank');
     onClose();
   };

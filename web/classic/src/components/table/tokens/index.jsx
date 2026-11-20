@@ -42,6 +42,7 @@ import CCSwitchModal from './modals/CCSwitchModal';
 import { useTokensData } from '../../../hooks/tokens/useTokensData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
+import { withTokenKeyPrefix } from '../../../helpers/token';
 
 function TokensPage() {
   // Define the function first, then pass it into the hook to avoid TDZ errors
@@ -233,7 +234,7 @@ function TokensPage() {
 
     let apiKeyToUse = '';
     if (overrideKey) {
-      apiKeyToUse = 'sk-' + overrideKey;
+      apiKeyToUse = withTokenKeyPrefix(overrideKey);
     } else {
       const token =
         selectedKeys && selectedKeys.length === 1
@@ -246,7 +247,7 @@ function TokensPage() {
         return;
       }
       try {
-        apiKeyToUse = 'sk-' + (await fetchTokenKey(token));
+        apiKeyToUse = withTokenKeyPrefix(await fetchTokenKey(token));
       } catch (_) {
         return;
       }

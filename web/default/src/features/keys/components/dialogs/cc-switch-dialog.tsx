@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getUserModels } from '@/lib/api'
+import { withTokenKeyPrefix } from '@/lib/token-key'
 import { Button } from '@/components/ui/button'
 import { ComboboxInput } from '@/components/ui/combobox-input'
 import { Label } from '@/components/ui/label'
@@ -136,9 +137,7 @@ export function CCSwitchDialog(props: Props) {
       toast.warning(t('Please select a primary model'))
       return
     }
-    const key = props.tokenKey.startsWith('sk-')
-      ? props.tokenKey
-      : `sk-${props.tokenKey}`
+    const key = withTokenKeyPrefix(props.tokenKey)
     const url = buildCCSwitchURL(app, name, models, key)
     window.open(url, '_blank')
     props.onOpenChange(false)

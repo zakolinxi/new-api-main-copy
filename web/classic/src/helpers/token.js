@@ -132,3 +132,33 @@ export function parseChannelConnectionString(text) {
   }
   return null;
 }
+
+export const DEFAULT_TOKEN_KEY_PREFIX = 'sk-';
+
+/**
+ * 读取后端下发的密钥前缀（/api/status 的 token_key_prefix）。
+ * 老版本后端没有该字段，或状态尚未缓存时回落到 'sk-'。
+ * @returns {string}
+ */
+export function getTokenKeyPrefix() {
+  const raw = localStorage.getItem('status');
+  if (!raw) return DEFAULT_TOKEN_KEY_PREFIX;
+  try {
+    const status = JSON.parse(raw);
+    return (status && status.token_key_prefix) || DEFAULT_TOKEN_KEY_PREFIX;
+  } catch {
+    return DEFAULT_TOKEN_KEY_PREFIX;
+  }
+}
+
+/**
+ * 给裸 key 套上当前配置的前缀；已经带前缀则原样返回，避免重复拼接。
+ * @param {string} key
+ * @returns {string}
+ */
+export function withTokenKeyPrefix(key) {
+  if (!key) return '';
+  const prefix = getTokenKeyPrefix();
+  if (prefix && key.startsWith(prefix)) return key;
+  return prefix + key;
+}

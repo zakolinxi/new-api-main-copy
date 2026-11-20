@@ -80,6 +80,7 @@ func InitOptionMap() {
 	common.OptionMap[setting.TaskPluginDisabledFactoryKeysKey] = "[]"
 	jsplugin.DefaultRegistry.SetDisabledFactoryKeys(nil)
 	common.OptionMap["DataExportEnabled"] = strconv.FormatBool(common.DataExportEnabled)
+	common.OptionMap[setting.TokenKeyPrefixOptionKey] = setting.GetTokenKeyPrefix()
 	common.OptionMap["ChannelDisableThreshold"] = strconv.FormatFloat(common.ChannelDisableThreshold, 'f', -1, 64)
 	common.OptionMap["EmailDomainRestrictionEnabled"] = strconv.FormatBool(common.EmailDomainRestrictionEnabled)
 	common.OptionMap["EmailAliasRestrictionEnabled"] = strconv.FormatBool(common.EmailAliasRestrictionEnabled)
@@ -302,6 +303,9 @@ func validateOptionValue(key string, value string) error {
 }
 
 func normalizeOptionValue(key string, value string) (string, error) {
+	if key == setting.TokenKeyPrefixOptionKey {
+		return setting.NormalizeTokenKeyPrefix(value)
+	}
 	if key == setting.UserRequestRateLimitDefaultOptionKey {
 		value = strings.TrimSpace(value)
 		return value, setting.ValidateUserRequestRateLimitDefault(value)
@@ -472,6 +476,9 @@ func updateOptionMap(key string, value string) (err error) {
 	common.OptionMapRWMutex.Lock()
 	defer common.OptionMapRWMutex.Unlock()
 	common.OptionMap[key] = value
+	if key == setting.TokenKeyPrefixOptionKey {
+		setting.SetTokenKeyPrefix(value)
+	}
 	if key == "request_debug.raw_enabled" {
 		common.SetRequestDebugRawEnabled(value == "true")
 	}

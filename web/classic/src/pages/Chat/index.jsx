@@ -22,6 +22,7 @@ import { useTokenKeys } from '../../hooks/chat/useTokenKeys';
 import { Spin } from '@douyinfe/semi-ui';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { withTokenKeyPrefix } from '../../helpers/token';
 
 const ChatPage = () => {
   const { t } = useTranslation();
@@ -43,7 +44,7 @@ const ChatPage = () => {
               '{address}',
               encodeURIComponent(serverAddress),
             );
-            link = link.replaceAll('{key}', 'sk-' + key);
+            link = link.replaceAll('{key}', withTokenKeyPrefix(key));
           }
         }
       }

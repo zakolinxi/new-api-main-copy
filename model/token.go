@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
@@ -166,7 +167,7 @@ func SearchUserTokens(userId int, keyword string, token string, offset int, limi
 	}
 
 	if token != "" {
-		token = strings.TrimPrefix(token, "sk-")
+		token = setting.TrimTokenKeyPrefix(token)
 	}
 
 	// 超量用户（令牌数超过上限）只允许精确搜索，禁止模糊搜索

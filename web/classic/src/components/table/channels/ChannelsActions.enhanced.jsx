@@ -3,7 +3,7 @@ Copyright (C) 2025 QuantumNous
 Enhanced Channels Actions - 添加表格密度切换
 */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Button,
   Dropdown,
@@ -15,6 +15,7 @@ import {
 } from '@douyinfe/semi-ui';
 import CompactModeToggle from '../../common/ui/CompactModeToggle';
 import { TableDensitySwitcher } from '../../enhanced';
+import ChannelPriorityModal from './modals/ChannelPriorityModal';
 
 const ChannelsActionsEnhanced = ({
   enableBatchDelete,
@@ -44,11 +45,14 @@ const ChannelsActionsEnhanced = ({
   activePage,
   pageSize,
   setActivePage,
+  channels,
   t,
   // 新增：表格密度状态
   tableDensity = 'default',
   setTableDensity,
 }) => {
+  const [showPriorityModal, setShowPriorityModal] = useState(false);
+
   // 表格密度切换处理
   const handleDensityChange = (newDensity) => {
     setTableDensity(newDensity);
@@ -121,6 +125,13 @@ const ChannelsActionsEnhanced = ({
               {t('更多')}
             </Button>
           </Dropdown>
+          <Button
+            size='small'
+            className='w-full md:w-auto'
+            onClick={() => setShowPriorityModal(true)}
+          >
+            {t('优先级排序')}
+          </Button>
         </div>
 
         {/* 右侧：设置开关 + 密度切换 */}
@@ -185,6 +196,15 @@ const ChannelsActionsEnhanced = ({
           </Select>
         </div>
       </div>
+      {showPriorityModal && (
+        <ChannelPriorityModal
+          visible={showPriorityModal}
+          onCancel={() => setShowPriorityModal(false)}
+          channels={channels}
+          t={t}
+          onReordered={loadChannels}
+        />
+      )}
     </div>
   );
 };

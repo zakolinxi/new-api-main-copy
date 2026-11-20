@@ -3,7 +3,6 @@ package service
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -13,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 
@@ -93,7 +93,7 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 		return err
 	}
 
-	token, err := model.GetTokenByKey(strings.TrimPrefix(relayInfo.TokenKey, "sk-"), false)
+	token, err := model.GetTokenByKey(setting.TrimTokenKeyPrefix(relayInfo.TokenKey), false)
 	if err != nil {
 		return err
 	}

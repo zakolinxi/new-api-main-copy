@@ -266,6 +266,8 @@ export const useLogsData = () => {
     localStorage.setItem(BILLING_DISPLAY_MODE_STORAGE_KEY, billingDisplayMode);
   }, [BILLING_DISPLAY_MODE_STORAGE_KEY, billingDisplayMode]);
 
+  const [exporting, setExporting] = useState(false);
+
   // 获取表单值的辅助函数，确保所有值都是字符串
   const getFormValues = () => {
     const formValues = formApi ? formApi.getValues() : {};
@@ -293,6 +295,59 @@ export const useLogsData = () => {
       request_id: formValues.request_id || '',
       logType: formValues.logType ? parseInt(formValues.logType) : 0,
     };
+  };
+
+  // 导出当前筛选条件下的日志：NDJSON，一行一条，末尾一行是统计。
+  // 管理员走 /api/log/export（全站日志），普通用户走 /self/export（只看自己的）。
+  const exportLogs = async () => {
+    const {
+      username,
+      token_name,
+      model_name,
+      start_timestamp,
+      end_timestamp,
+      channel,
+      group,
+      request_id,
+      logType: formLogType,
+    } = getFormValues();
+    const currentLogType = formLogType !== undefined ? formLogType : logType;
+    const params = new URLSearchParams({
+      type: String(currentLogType || 0),
+      username,
+      token_name,
+      model_name,
+      channel: String(channel || ''),
+      group,
+      request_id,
+      start_timestamp: String(
+        Math.floor(Date.parse(start_timestamp) / 1000) || '',
+      ),
+      end_timestamp: String(
+        Math.floor(Date.parse(end_timestamp) / 1000) || '',
+      ),
+    });
+    const url = isAdmin()
+      ? `/api/log/export?${params.toString()}`
+      : `/api/log/self/export?${params.toString()}`;
+    setExporting(true);
+    try {
+      const res = await API.get(url, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/x-ndjson' });
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `logs-${Date.now()}.ndjson`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(objectUrl);
+      showSuccess(t('日志已开始导出'));
+    } catch (error) {
+      showError(t('导出失败，请稍后重试'));
+    } finally {
+      setExporting(false);
+    }
   };
 
   // Statistics functions
@@ -1043,6 +1098,8 @@ export const useLogsData = () => {
     closeCollapsedModal,
 
     // Functions
+    exporting,
+    exportLogs,
     loadLogs,
     handlePageChange,
     handlePageSizeChange,

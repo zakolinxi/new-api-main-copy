@@ -90,6 +90,10 @@ page.html
 new-api.stderr.log
 new-api.stdout.log
 
+# Agent scratch dirs / Windows redirect artifacts
+.arts/
+nul
+
 # Binary / deploy artifacts
 *.deploy
 *.deploy.gz

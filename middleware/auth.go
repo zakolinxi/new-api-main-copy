@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -384,7 +385,7 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 		if strings.HasPrefix(key, "Bearer ") || strings.HasPrefix(key, "bearer ") {
 			key = strings.TrimSpace(key[7:])
 		}
-		key = strings.TrimPrefix(key, "sk-")
+		key = setting.TrimTokenKeyPrefix(key)
 		parts := strings.Split(key, "-")
 		key = parts[0]
 
@@ -571,11 +572,11 @@ func TokenAuth() func(c *gin.Context) {
 			if strings.HasPrefix(key, "Bearer ") || strings.HasPrefix(key, "bearer ") {
 				key = strings.TrimSpace(key[7:])
 			}
-			key = strings.TrimPrefix(key, "sk-")
+			key = setting.TrimTokenKeyPrefix(key)
 			parts = strings.Split(key, "-")
 			key = parts[0]
 		} else {
-			key = strings.TrimPrefix(key, "sk-")
+			key = setting.TrimTokenKeyPrefix(key)
 			parts = strings.Split(key, "-")
 			key = parts[0]
 		}

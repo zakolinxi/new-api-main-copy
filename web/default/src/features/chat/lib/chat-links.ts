@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { API_KEY_STATUS } from '@/features/keys/constants'
+import { withTokenKeyPrefix } from '@/lib/token-key'
 
 export type ChatLinkType = 'web' | 'custom-protocol' | 'fluent'
 
@@ -144,9 +145,8 @@ function replaceToken(source: string, token: string, value: string) {
 }
 
 function normalizeApiKey(apiKey: string): string {
-  const trimmed = apiKey.trim()
-  if (!trimmed) return ''
-  return trimmed.startsWith('sk-') ? trimmed : `sk-${trimmed}`
+  // 前缀由后端配置（默认 sk-，可改成 sk-mao- 这类形状），不能硬编码。
+  return withTokenKeyPrefix(apiKey)
 }
 
 export function resolveChatUrl({

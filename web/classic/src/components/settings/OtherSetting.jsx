@@ -482,6 +482,21 @@ const OtherSetting = () => {
                 {t('设置系统名称')}
               </Button>
               <Form.Input
+                label={t('API 密钥前缀')}
+                placeholder={t('例如 sk-mao-，留空则为默认的 sk-')}
+                field={'TokenKeyPrefix'}
+                onChange={handleInputChange}
+                extraText={t(
+                  '只影响新生成的密钥外观；已签发的旧密钥（sk- 开头）继续有效。保存后刷新页面生效。',
+                )}
+              />
+              <Button
+                onClick={() => submitOption('TokenKeyPrefix')}
+                loading={loadingInput['TokenKeyPrefix']}
+              >
+                {t('设置密钥前缀')}
+              </Button>
+              <Form.Input
                 label={t('Logo 图片地址')}
                 placeholder={t('在此输入 Logo 图片地址')}
                 field={'Logo'}
