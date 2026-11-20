@@ -4182,6 +4182,7 @@
     "Supported modalities": "支持的模态",
     "Supported parameters": "支持的参数",
     "Supported variables": "支持变量",
+    "Credential headers (Authorization, Cookie, X-Api-Key, Host, ...) cannot be copied from the client. Use {api_key} to send this channel key instead.": "凭证头（Authorization、Cookie、X-Api-Key、Host 等）不能从客户端转抄，请用 {api_key} 发送本渠道密钥",
     "Supports `-thinking`, `-thinking-": "支持 `-thinking`、`-thinking-`",
     "Supports HTML markup or iframe embedding. Enter HTML code directly, or provide a complete URL to automatically embed it as an iframe.": "支持 HTML 标记或 iframe 嵌入。直接输入 HTML 代码，或提供完整的 URL 以将其自动嵌入为 iframe。",
     "Supports one-click configuration and perfectly adapts to NewAPI multi-protocol configuration.": "支持一键配置并完美适配 NewAPI 多协议配置",

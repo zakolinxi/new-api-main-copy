@@ -4172,6 +4172,7 @@
     "Supported modalities": "サポートされるモダリティ",
     "Supported parameters": "対応パラメータ",
     "Supported variables": "サポートされる変数",
+    "Credential headers (Authorization, Cookie, X-Api-Key, Host, ...) cannot be copied from the client. Use {api_key} to send this channel key instead.": "認証ヘッダー（Authorization、Cookie、X-Api-Key、Host など）はクライアントからコピーできません。このチャネルのキーを送るには {api_key} を使用してください。",
     "Supports `-thinking`, `-thinking-": "「-thinking」、「-thinking-」をサポートします",
     "Supports HTML markup or iframe embedding. Enter HTML code directly, or provide a complete URL to automatically embed it as an iframe.": "HTMLマークアップまたはiframe埋め込みをサポートします。HTMLコードを直接入力するか、完全なURLを提供してiframeとして自動的に埋め込みます。",
     "Supports one-click configuration and perfectly adapts to NewAPI multi-protocol configuration.": "ワンクリック設定をサポートし、NewAPIマルチプロトコル設定に完全に適応します。",

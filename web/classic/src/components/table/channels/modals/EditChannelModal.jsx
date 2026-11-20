@@ -2740,6 +2740,11 @@ const EditChannelModal = (props) => {
                             <div>
                               {t('渠道密钥')}: {'{api_key}'}
                             </div>
+                            <div>
+                              {t(
+                                '凭证头（Authorization、Cookie、X-Api-Key、Host 等）不能从客户端转抄，请用 {api_key} 发送本渠道密钥',
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>

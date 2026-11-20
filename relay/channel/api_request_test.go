@@ -568,3 +568,84 @@ func TestProcessHeaderOverride_NonClaudeCodePreservesExistingBehavior(t *testing
 	require.Equal(t, "trace-123", headers["x-client"])
 	require.Equal(t, "channel-key", headers["x-channel-key"])
 }
+
+// TestShouldSkipPassthroughHeader_Credentials pins the runtime half of the
+// client-credential rule: wildcard and regex passthrough must never forward a
+// header that authenticates the caller against this gateway.
+func TestShouldSkipPassthroughHeader_Credentials(t *testing.T) {
+	skipped := []string{
+		"Authorization",
+		"authorization",
+		"X-Api-Key",
+		"X-Goog-Api-Key",
+		"Api-Key",
+		"X-Auth-Token",
+		"X-Amz-Security-Token",
+		"Proxy-Authorization",
+		"Cookie",
+		"Host",
+		"Connection",
+		"Content-Length",
+	}
+	for _, name := range skipped {
+		t.Run("skip "+name, func(t *testing.T) {
+			require.True(t, shouldSkipPassthroughHeader(name))
+		})
+	}
+
+	// Sanity check the other direction: an ordinary header still passes.
+	require.False(t, shouldSkipPassthroughHeader("X-Trace-Id"))
+}
+
+func TestProcessHeaderOverride_WildcardDoesNotForwardCredentials(t *testing.T) {
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	ctx.Request.Header.Set("Authorization", "Bearer sk-gateway-secret")
+	ctx.Request.Header.Set("X-Api-Key", "sk-gateway-secret")
+	ctx.Request.Header.Set("Api-Key", "sk-gateway-secret")
+	ctx.Request.Header.Set("X-Auth-Token", "gateway-session")
+	ctx.Request.Header.Set("Cookie", "session=abc")
+	ctx.Request.Header.Set("X-Trace-Id", "trace-123")
+
+	// Wildcard only: nothing explicit to win back the credentials.
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType:     constant.ChannelTypeOpenAI,
+			ApiKey:          "channel-key",
+			HeadersOverride: map[string]any{"*": ""},
+		},
+	}
+
+	headers, err := processHeaderOverride(info, ctx)
+	require.NoError(t, err)
+	require.Equal(t, "trace-123", headers["x-trace-id"])
+	for _, leaked := range []string{"authorization", "x-api-key", "api-key", "x-auth-token", "cookie"} {
+		_, present := headers[leaked]
+		require.False(t, present, "%s must not be forwarded by wildcard passthrough", leaked)
+	}
+}
+
+func TestProcessHeaderOverride_RegexDoesNotForwardCredentials(t *testing.T) {
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	ctx.Request.Header.Set("Authorization", "Bearer sk-gateway-secret")
+	ctx.Request.Header.Set("Api-Key", "sk-gateway-secret")
+	ctx.Request.Header.Set("X-Trace-Id", "trace-123")
+
+	// A pattern broad enough to match the credential headers too.
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType:     constant.ChannelTypeOpenAI,
+			ApiKey:          "channel-key",
+			HeadersOverride: map[string]any{"re:^": ""},
+		},
+	}
+
+	headers, err := processHeaderOverride(info, ctx)
+	require.NoError(t, err)
+	require.Equal(t, "trace-123", headers["x-trace-id"])
+	_, hasAuthorization := headers["authorization"]
+	require.False(t, hasAuthorization)
+	_, hasApiKey := headers["api-key"]
+	require.False(t, hasApiKey)
+}

@@ -3011,6 +3011,11 @@ export function ChannelMutateDrawer({
                                 </code>{' '}
                                 — {t('Client header value')}
                               </FormDescription>
+                              <FormDescription className='text-xs'>
+                                {t(
+                                  'Credential headers (Authorization, Cookie, X-Api-Key, Host, ...) cannot be copied from the client. Use {api_key} to send this channel key instead.'
+                                )}
+                              </FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}

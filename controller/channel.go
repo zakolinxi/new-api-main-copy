@@ -1077,6 +1077,13 @@ func EditTagChannels(c *gin.Context) {
 			})
 			return
 		}
+		if err := model.ValidateHeaderOverride(trimmed); err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
 		channelTag.HeaderOverride = common.GetPointer[string](trimmed)
 	}
 	result, err := service.UpdateChannelsByTag(service.ChannelTagMutationInput{

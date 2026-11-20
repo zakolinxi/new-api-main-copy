@@ -4172,6 +4172,7 @@
     "Supported modalities": "Modalités prises en charge",
     "Supported parameters": "Paramètres pris en charge",
     "Supported variables": "Variables supportées",
+    "Credential headers (Authorization, Cookie, X-Api-Key, Host, ...) cannot be copied from the client. Use {api_key} to send this channel key instead.": "Les en-têtes d'authentification (Authorization, Cookie, X-Api-Key, Host, ...) ne peuvent pas être copiés depuis le client. Utilisez {api_key} pour envoyer la clé de ce canal.",
     "Supports `-thinking`, `-thinking-": "Prend en charge `-thinking`, `-thinking-",
     "Supports HTML markup or iframe embedding. Enter HTML code directly, or provide a complete URL to automatically embed it as an iframe.": "Prend en charge le balisage HTML ou l'intégration d'iframe. Entrez le code HTML directement, ou fournissez une URL complète pour l'intégrer automatiquement en tant qu'iframe.",
     "Supports one-click configuration and perfectly adapts to NewAPI multi-protocol configuration.": "Prend en charge la configuration en un clic et s'adapte parfaitement à la configuration multi-protocole NewAPI.",

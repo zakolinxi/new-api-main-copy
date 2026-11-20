@@ -1186,6 +1186,13 @@ func (channel *Channel) ValidateSettings() error {
 			return err
 		}
 	}
+	// header_override is applied to every outbound request, so a malformed value
+	// has to fail on write rather than on the next call through the channel.
+	if channel.HeaderOverride != nil {
+		if err := ValidateHeaderOverride(*channel.HeaderOverride); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

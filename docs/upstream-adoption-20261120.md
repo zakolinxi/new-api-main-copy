@@ -102,6 +102,20 @@ default 的导出按钮直接用当前 URL 里的筛选条件（时间范围/模
 | `middleware/frontend_static.go` | 前端静态资源 gzip/缓存中间件 | 本地已有自己的 `web-router.go` 静态服务与双前端切换 |
 | `model/auth_cache_integrity.go` | 用户缓存完整性校验 | 依赖上游的 access token 体系 |
 
+### 10. header_override 保存期校验（安全加固，本地独有）
+
+| 项 | 内容 |
+|---|---|
+| 问题 | `header_override` 之前只校验「是不是合法 JSON」。header 名写错、值里混进 CRLF、`{client_header:X}` 指向凭证头、`re:` 正则写坏，都要等到**下一个请求打到这个渠道**才炸，报错还是笼统的 `channel:header_override_invalid`，看不出是哪一行配错了 |
+| 实现 | `model/channel_header_override.go` 的 `ValidateHeaderOverride`，接在 `Channel.ValidateSettings()` 末尾 |
+| 校验项 | 必须是 JSON 对象；每个值必须是字符串；header 名过 `httpguts.ValidHeaderFieldName`；值不得含 `\r`/`\n`/`\x00`，长度 ≤ 8192 字节；`re:`/`regex:` 必须能编译；`{client_header:X}` 的 X 必须是合法头名且不在凭证名单里 |
+| 凭证名单 | `Authorization`、`Proxy-Authorization`、`Cookie`、`Set-Cookie`、`Host`、`X-Api-Key`、`X-Goog-Api-Key`、`Api-Key`、`X-Auth-Token`、`X-Amz-Security-Token` |
+| 不影响的 | 显式写 `Authorization: Bearer {api_key}` **仍然允许**（前端模板本身就是这个），只有「从客户端抄凭证」才拒。判据是「整个值正好是 `{client_header:...}`」，与运行时的替换规则严格一致 —— 值里夹着别的内容时运行时本来就当普通字面量，校验也不拦 |
+| 覆盖的写入路径 | ① 新增/编辑/克隆 → `ValidateSettings`；② 按标签批量改 → `UpdateChannelsByTagTx`（整批只校验一次）+ 控制器给中文报错；③ 渠道 patch → `UpdateChannelAdminPatchTx` 的 `header_override` 分支。后两条只在**显式写这个字段**时校验，旧渠道改别的字段不受影响 |
+| 运行时的另一半 | `relay/channel/api_request.go` 的 `passthroughSkipHeaderNamesLower` 补上 `api-key` / `x-auth-token` / `x-amz-security-token`。之前 `*` 或 `re:` 透传会把这三个头原样转给上游 |
+| 兼容性 | 已有渠道若配了 `{client_header:Authorization}`（或依赖 `*` 透传上述三个头），下次**编辑该字段**时会被拒。这是有意的能力收窄，替代写法是 `Authorization: Bearer {api_key}`（用渠道自己的 key），或 `{client_header:X-Trace-Id}` 这类非凭证头 |
+| 测试 | `model/channel_header_override_test.go`（11 个用例）+ `relay/channel/api_request_test.go` 新增 3 个（通配/正则不透传凭证）→ **通过** |
+
 ---
 
 ## 二、验证证据
@@ -114,6 +128,10 @@ go test ./common ./setting/... ./service ./middleware ./router ./relay/channel .
 go test -run RequestPatch ./relay/channel/          → 10 个用例通过
 go test -run RequestPatchAudit ./relay/common/      → 7 个用例通过
 go test -run TestChannelValidateSettings ./model/   → 通过（含 request_patch 校验 4 个子用例）
+go test -run "HeaderOverride|ShouldSkipPassthroughHeader" ./relay/channel/ ./model/
+                                                    → 通过（保存校验 + 通配/正则不透传凭证）
+go test ./model/ ./service/ ./relay/channel/ ./relay/common/ ./setting/operation_setting/
+                                                    → 全绿
 web/default: tsgo -b                                → 本次改动的文件无类型错误（auth/lobe-icon 的报错是既存）
 web/default: rsbuild build                          → 通过（Total 60543.8 kB）
 web/classic: rsbuild build                          → 通过（Total 23024.0 kB）
@@ -168,6 +186,7 @@ controller/channel_priority.go       controller/log_export.go
 model/channel_priority.go            model/channel_priority_test.go
 model/log_export_helper.go           model/system_sync_task.go
 model/auth_cache_integrity.go        service/log_export.go
+model/channel_header_override.go     model/channel_header_override_test.go
 setting/operation_setting/log_setting.go   setting/token_key_setting.go
 setting/token_key_setting_test.go    middleware/frontend_static.go
 pkg/requestpatch/patch.go            pkg/requestpatch/patch_test.go
@@ -191,6 +210,10 @@ router/channel-router.go             +2 条路由（priority/order、priority/re
 router/api-router.go                 +2 条路由（log/export、log/self/export）
 model/channel.go                     ChannelSortOptions.Apply 用 COALESCE + id DESC 兜底
                                      ValidateSettings 增加 request_patch 解码校验
+                                     ValidateSettings 增加 header_override 校验
+service/channel_mutation.go          按标签批量改 / 渠道 patch 写 header_override 时校验
+controller/channel.go                EditTagChannels 的 header_override 校验 + 中文报错
+relay/channel/api_request.go         passthroughSkipHeaderNamesLower 补 3 个凭证头
 model/option.go                      TokenKeyPrefix 三件套 + 默认值注册
 relay/common/request_patch_audit.go  request_patch 审计行（RFC 6902 路径转点号）
 relay/common/request_patch_audit_test.go

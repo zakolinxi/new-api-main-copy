@@ -304,6 +304,14 @@ func UpdateChannelsByTagTx(tx *gorm.DB, input ChannelTagMutationInput) (*Channel
 	if tx == nil {
 		return nil, errors.New("channel tag mutation transaction is nil")
 	}
+	// Validate once for the whole tag instead of per row: the value is copied
+	// onto every matched channel, so a bad one would otherwise be written to all
+	// of them and only fail on the next call through any of them.
+	if input.HeaderOverride != nil {
+		if err := model.ValidateHeaderOverride(*input.HeaderOverride); err != nil {
+			return nil, err
+		}
+	}
 	var channels []model.Channel
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tag = ?", input.Tag).Find(&channels).Error; err != nil {
 		return nil, err
@@ -448,6 +456,14 @@ func UpdateChannelAdminPatchTx(tx *gorm.DB, input ChannelAdminPatchInput) (*Chan
 		case "param_override":
 			next.ParamOverride = input.Patch.ParamOverride
 		case "header_override":
+			// Only validated when the field is actually written: a channel that
+			// still carries a legacy value must stay editable in every other
+			// field, otherwise the narrowing would freeze existing deployments.
+			if input.Patch.HeaderOverride != nil {
+				if err := model.ValidateHeaderOverride(*input.Patch.HeaderOverride); err != nil {
+					return nil, err
+				}
+			}
 			next.HeaderOverride = input.Patch.HeaderOverride
 		case "remark":
 			next.Remark = input.Patch.Remark
