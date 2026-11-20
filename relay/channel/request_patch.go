@@ -84,6 +84,46 @@ func channelRequestPatchEffects(info *common.RelayInfo) ([]requestpatch.Effect, 
 	return effects, nil
 }
 
+// protectedRequestHeaderNames extends the patch contract's protection to the
+// credential headers the adaptors write for specific vendors, and to the
+// forwarding headers some upstream frameworks trust when they sit behind a
+// proxy.
+//
+// A patch exists to adjust a payload, not to repoint credentials or to rewrite
+// the proxy chain: an upstream that honours X-Forwarded-* or X-Rewrite-URL can
+// be steered to a different route by them. A channel that genuinely needs to
+// set one of these has header_override, which is the documented place for it.
+var protectedRequestHeaderNames = map[string]struct{}{
+	"x-api-key":              {},
+	"x-goog-api-key":         {},
+	"api-key":                {},
+	"x-rewrite-url":          {},
+	"x-original-url":         {},
+	"x-http-method-override": {},
+}
+
+// protectedRequestHeaderPrefixes covers whole families, so a new forwarding
+// variant does not have to be listed one by one.
+var protectedRequestHeaderPrefixes = []string{"x-forwarded-"}
+
+// isProtectedRequestHeader reports a header a channel request_patch must not
+// set or remove.
+func isProtectedRequestHeader(name string) bool {
+	if requestpatch.IsProtectedHeader(name) {
+		return true
+	}
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if _, ok := protectedRequestHeaderNames[lower]; ok {
+		return true
+	}
+	for _, prefix := range protectedRequestHeaderPrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // isJSONRequestContentType reports whether a JsonPatch effect has a document to
 // operate on. An empty Content-Type is treated as possibly JSON: many clients
 // omit it, and applyRequestPatch still refuses to parse a body that turns out
@@ -171,7 +211,7 @@ func applyRequestPatch(req *http.Request, body []byte, effects []requestpatch.Ef
 			return nil, false, nil
 		}
 	}
-	patchedBody, patchedHeader, err := requestpatch.Apply(body, req.Header, applied, requestpatch.IsProtectedHeader)
+	patchedBody, patchedHeader, err := requestpatch.Apply(body, req.Header, applied, isProtectedRequestHeader)
 	if err != nil {
 		return nil, false, err
 	}

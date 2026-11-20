@@ -231,3 +231,40 @@ func TestChannelRequestPatchEffectsCachedPerChannelID(t *testing.T) {
 	require.Len(t, right, 1)
 	require.NotSame(t, &left[0], &right[0], "two channels keep their own entry")
 }
+
+// A patch must not be able to repoint credentials or steer the proxy chain.
+func TestProtectedRequestHeaderCoversCredentialsAndForwarding(t *testing.T) {
+	for _, name := range []string{
+		"Authorization",
+		"X-Api-Key",
+		"x-goog-api-key",
+		"api-key",
+		"X-Forwarded-For",
+		"X-Forwarded-Host",
+		"X-Rewrite-URL",
+		"X-Original-URL",
+		"X-HTTP-Method-Override",
+		"Content-Type",
+		"Host",
+	} {
+		require.True(t, isProtectedRequestHeader(name), "%s must stay protected", name)
+	}
+	for _, name := range []string{"X-Trace", "anthropic-beta", "X-Custom-Flag"} {
+		require.False(t, isProtectedRequestHeader(name), "%s must remain settable", name)
+	}
+}
+
+func TestApplyRequestPatchRejectsCredentialHeaderOverride(t *testing.T) {
+	body := []byte(`{"model":"m"}`)
+	effects, err := ChannelRequestPatchEffects(dto.ChannelSettings{RequestPatch: json.RawMessage(`[
+		{"type":"header.patch","set":{"x-api-key":"stolen"}},
+		{"type":"header.patch","set":{"X-Forwarded-For":"127.0.0.1"}}
+	]`)})
+	require.NoError(t, err)
+
+	for index := range effects {
+		req := httptest.NewRequest("POST", "https://upstream.test/v1/messages", strings.NewReader(string(body)))
+		_, _, err = applyRequestPatch(req, body, effects[index:index+1])
+		require.ErrorContains(t, err, "protected", "effect %d must be refused", index)
+	}
+}

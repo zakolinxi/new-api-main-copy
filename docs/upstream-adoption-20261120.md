@@ -53,7 +53,7 @@
 | 生效点 | `relay/channel/api_request.go` 的 `DoApiRequest`：读完 body → 建好请求头 → 应用 effects → 再让 Header Override 覆盖 |
 | 语义 | `json.patch`（RFC 6902，含 add/remove/replace/move/copy/test）+ `header.patch`（set/remove）；`Apply` 是**全有或全无**，任一 op 被拒则整条请求不改 |
 | 适用范围 | `json.patch` 只对 **JSON 请求体**生效。无 body 的请求（GET/DELETE）和非 JSON 体（multipart/表单/纯文本）会自动只保留 `header.patch`，既不失败也不把 body 读进内存；`DoFormRequest` 路径不应用补丁 |
-| 边界 | body 上限走 `MAX_REQUEST_BODY_MB`（默认 128MB）；`Authorization` / `Host` / `Content-Length` / `Content-Type` / hop-by-hop 头受保护，改不动 |
+| 边界 | body 上限走 `MAX_REQUEST_BODY_MB`（默认 128MB）；`Authorization` / `Host` / `Content-Length` / `Content-Type` / hop-by-hop 头受保护，改不动。另外比上游多保护了凭证头（`X-Api-Key`、`X-Goog-Api-Key`、`api-key`）和转发链头（`X-Forwarded-*`、`X-Rewrite-URL`、`X-Original-URL`、`X-HTTP-Method-Override`）——补丁不该重定向凭证或改写代理链，真要设这些走 `header_override` |
 | 保存校验 | `model.Channel.ValidateSettings()` 在存库时就解码一遍，非法 effects 直接拒绝，不会拖到线上每个请求才炸 |
 | 审计 | 改敏感路径（messages/model/reasoning…）或任何 header 时，往消费日志的 `other.admin_info.rp` 写一行，例如 `request_patch: replace messages.0.content`。路径会从 RFC 6902 的 `/a/b` 转成 `param_override` 那套 `a.b` 点号形式，管理员不用两种写法对照。**值永不记录**（值里可能是用户内容），单次上限 32 行 |
 | 缓存 | 解码结果按渠道 id + setting 原文缓存（`sync.Map`），改配置后下一个请求即生效，不需重启 |
