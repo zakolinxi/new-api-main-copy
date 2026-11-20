@@ -31,6 +31,11 @@ ENV GOEXPERIMENT=greenteagc
 WORKDIR /build
 
 ADD go.mod go.sum ./
+# go.mod replaces github.com/QuantumNous/new-api/relaykit with ./relaykit, so
+# `go mod download` needs that directory to already exist. Without this line a
+# clean clone fails with "replacement directory does not exist" before any
+# package is fetched.
+COPY relaykit ./relaykit
 RUN go mod download
 
 COPY . .
