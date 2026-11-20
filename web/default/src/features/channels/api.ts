@@ -25,6 +25,8 @@ import type {
   Channel,
   ChannelBalanceResponse,
   ChannelOpsResponse,
+  ChannelPriorityMove,
+  ChannelPriorityOrderResponse,
   ChannelTestResponse,
   CopyChannelParams,
   CopyChannelResponse,
@@ -93,6 +95,35 @@ export async function searchChannels(
   params: SearchChannelsParams
 ): Promise<SearchChannelsResponse> {
   const res = await api.get('/api/channel/search', { params })
+  return res.data
+}
+
+/**
+ * Read the routing order: every channel's id and priority, plus the revision a
+ * reorder has to echo back.
+ */
+export async function getChannelPriorityOrder(): Promise<ChannelPriorityOrderResponse> {
+  const res = await api.get(
+    '/api/channel/priority/order',
+    channelActionConfig()
+  )
+  return res.data
+}
+
+/**
+ * Move one channel before or after another in descending priority order.
+ *
+ * A stale revision is rejected instead of overwriting a concurrent edit, so the
+ * caller reloads the order and asks the operator to retry.
+ */
+export async function reorderChannelPriority(
+  move: ChannelPriorityMove
+): Promise<ChannelPriorityOrderResponse> {
+  const res = await api.post(
+    '/api/channel/priority/reorder',
+    move,
+    channelActionConfig()
+  )
   return res.data
 }
 

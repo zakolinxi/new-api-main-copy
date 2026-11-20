@@ -91,6 +91,36 @@ export async function getUserInfo(
 }
 
 // ============================================================================
+// Log Export
+// ============================================================================
+
+/**
+ * Streams the matching logs as NDJSON and hands back the raw blob.
+ *
+ * The endpoint is a server-side paged loop, so this is one long response
+ * instead of many round trips; the caller owns the download and the abort
+ * story. `isAdmin` picks the admin or the self endpoint, which is the same
+ * split the list views use.
+ */
+export async function exportLogs(
+  params: Record<string, unknown>,
+  isAdmin: boolean
+): Promise<Blob> {
+  const query = buildQueryParams(params)
+  // The self route nests under /self, unlike the list routes that only append
+  // a suffix, so the path is spelled out instead of going through buildApiPath.
+  const path = isAdmin ? '/api/log/export' : '/api/log/self/export'
+  const res = await api.get(`${path}?${query}`, {
+    responseType: 'blob',
+    // The response carries no `{ success }` envelope on the happy path, and a
+    // failure is reported by the caller after reading the blob.
+    skipBusinessError: true,
+    disableDuplicate: true,
+  })
+  return res.data as Blob
+}
+
+// ============================================================================
 // MjProxy (Drawing) Logs API
 // ============================================================================
 

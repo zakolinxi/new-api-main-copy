@@ -110,6 +110,7 @@ export type SiteSettings = {
   'theme.frontend': string
   Notice: string
   SystemName: string
+  TokenKeyPrefix: string
   Logo: string
   Footer: string
   About: string

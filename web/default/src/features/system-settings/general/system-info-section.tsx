@@ -56,6 +56,7 @@ const _systemInfoSchema = z.object({
     frontend: z.enum(['default', 'classic']),
   }),
   SystemName: z.string().min(1),
+  TokenKeyPrefix: z.string().optional(),
   ServerAddress: z.string().optional(),
   Logo: z.string().url().optional().or(z.literal('')),
   Footer: z.string().optional(),
@@ -88,6 +89,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
         defaultValues.theme?.frontend === 'classic' ? 'classic' : 'default',
     },
     SystemName: normalizeValue(defaultValues.SystemName),
+    TokenKeyPrefix: normalizeValue(defaultValues.TokenKeyPrefix),
     ServerAddress: normalizeValue(defaultValues.ServerAddress),
     Logo: normalizeValue(defaultValues.Logo),
     Footer: normalizeValue(defaultValues.Footer),
@@ -106,6 +108,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     SystemName: z.string().min(1, {
       error: () => t('System name is required'),
     }),
+    TokenKeyPrefix: z.string().optional(),
     ServerAddress: z.string().optional(),
     Logo: z.string().url().optional().or(z.literal('')),
     Footer: z.string().optional(),
@@ -211,6 +214,25 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                     </FormControl>
                     <FormDescription>
                       {t('The name displayed across the application')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='TokenKeyPrefix'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('API Key Prefix')}</FormLabel>
+                    <FormControl>
+                      <Input placeholder='sk-' {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Only changes how newly issued keys look, for example sk-mao-. Keys already issued keep working, because a key without the configured prefix still matches the default sk- form. Reload the page after saving.'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

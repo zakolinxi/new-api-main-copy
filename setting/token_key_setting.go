@@ -52,7 +52,7 @@ func NormalizeTokenKeyPrefix(value string) (string, error) {
 		return DefaultTokenKeyPrefix, nil
 	}
 	if len(prefix) > MaxTokenKeyPrefixLength {
-		return "", fmt.Errorf("密钥前缀最多 %d 个字符", MaxTokenKeyPrefixLength)
+		return "", fmt.Errorf("the key prefix must not exceed %d characters", MaxTokenKeyPrefixLength)
 	}
 	for _, char := range prefix {
 		switch {
@@ -61,7 +61,7 @@ func NormalizeTokenKeyPrefix(value string) (string, error) {
 		case char >= '0' && char <= '9':
 		case char == '-' || char == '_':
 		default:
-			return "", fmt.Errorf("密钥前缀只能包含字母、数字、- 和 _")
+			return "", fmt.Errorf("the key prefix may only contain letters, digits, '-' and '_'")
 		}
 	}
 	if !strings.HasSuffix(prefix, "-") {

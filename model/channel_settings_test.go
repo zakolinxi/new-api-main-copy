@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -257,6 +258,48 @@ func TestInferencePresetSettingsAndDatabaseRoundTrip(t *testing.T) {
 					}
 				})
 			}
+		})
+	}
+}
+
+func TestChannelValidateSettingsChecksRequestPatch(t *testing.T) {
+	tests := []struct {
+		name    string
+		patch   string
+		wantErr string
+	}{
+		{
+			name: "unset is valid",
+		},
+		{
+			name:  "valid body and header effects are accepted",
+			patch: `[{"type":"json.patch","ops":[{"op":"add","path":"/metadata","value":{}}]},{"type":"header.patch","set":{"X-Trace":"channel"}}]`,
+		},
+		{
+			name:    "unknown effect type is rejected",
+			patch:   `[{"type":"path.rewrite"}]`,
+			wantErr: "not supported",
+		},
+		{
+			name:    "unsupported operation is rejected",
+			patch:   `[{"type":"json.patch","ops":[{"op":"merge","path":"/model"}]}]`,
+			wantErr: "not supported",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			channel := &Channel{}
+			if tt.patch != "" {
+				channel.SetSetting(dto.ChannelSettings{RequestPatch: json.RawMessage(tt.patch)})
+			}
+			err := channel.ValidateSettings()
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, "request_patch")
+			require.ErrorContains(t, err, tt.wantErr)
 		})
 	}
 }

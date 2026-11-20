@@ -364,6 +364,54 @@ export interface ChannelFormData {
 }
 
 // ============================================================================
+// Channel Priority Order
+// ============================================================================
+
+/**
+ * One entry of the routing order. `priority` is null for a channel that was
+ * never given one, which routes as 0, so the UI must not treat null as "unset
+ * but higher".
+ */
+export interface ChannelPriority {
+  id: number
+  priority?: number | null
+}
+
+/** A priority the reorder actually changed; the undo payload is the same shape. */
+export interface ChannelPriorityChange {
+  id: number
+  previous?: number | null
+  priority?: number | null
+}
+
+/**
+ * The whole order plus the optimistic-lock revision it was read at. The
+ * revision is a hash of every id/priority pair, so any concurrent edit makes a
+ * move fail instead of silently overwriting it.
+ */
+export interface ChannelPriorityOrder {
+  revision: string
+  items: ChannelPriority[]
+  changes: ChannelPriorityChange[]
+}
+
+export interface ChannelPriorityOrderResponse {
+  success: boolean
+  message?: string
+  data?: ChannelPriorityOrder
+}
+
+export interface ChannelPriorityMove {
+  revision: string
+  id: number
+  target_id: number
+  /** Position is resolved in descending priority order, which is the UI order. */
+  position: 'before' | 'after'
+  preview?: boolean
+  restore?: ChannelPriorityChange[]
+}
+
+// ============================================================================
 // Add Channel Request (special structure)
 // ============================================================================
 

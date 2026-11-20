@@ -28,6 +28,7 @@ const defaultSiteSettings: SiteSettings = {
   'theme.frontend': 'default',
   Notice: '',
   SystemName: 'New API',
+  TokenKeyPrefix: 'sk-',
   Logo: '',
   Footer: '',
   About: '',

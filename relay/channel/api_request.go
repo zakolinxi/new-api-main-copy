@@ -404,6 +404,21 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 		return nil, fmt.Errorf("get request url failed: %w", err)
 	}
 	logger.LogDebug(c, "fullRequestURL: %s", common.SanitizeURLForLog(fullRequestURL))
+	// A channel request_patch rewrites the outbound body, so the body has to be
+	// buffered before net/http takes it over. A channel without the setting
+	// keeps the original body reader untouched.
+	patchEffects, err := channelRequestPatchEffects(info)
+	if err != nil {
+		return nil, err
+	}
+	var patchBody []byte
+	if len(patchEffects) > 0 {
+		patchBody, err = readRequestBodyForPatch(requestBody)
+		if err != nil {
+			return nil, types.NewError(err, types.ErrorCodeChannelRequestPatchInvalid)
+		}
+		requestBody = bytes.NewReader(patchBody)
+	}
 	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("new request failed: %w", err)
@@ -429,6 +444,13 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 		case rootconstant.ChannelTypeCodeBuddy:
 			conversationID := ResolveCodeBuddyConversationID(c.Request.Header, info.Request)
 			ApplyCompatibilityHeadersWithClientIdentity(info.ChannelType, req.Header, info.ApiKey, info.IsStream, conversationID, info.ChannelOtherSettings.ClientIdentity)
+		}
+	}
+	// Apply the channel request patch before Header Override, so an
+	// administrator's explicit header override still wins over it.
+	if len(patchEffects) > 0 {
+		if err = applyRequestPatch(req, patchBody, patchEffects); err != nil {
+			return nil, types.NewError(fmt.Errorf("apply channel request patch failed: %w", err), types.ErrorCodeChannelRequestPatchInvalid)
 		}
 	}
 	// Apply Header Override last so it wins over every ordinary header emitted

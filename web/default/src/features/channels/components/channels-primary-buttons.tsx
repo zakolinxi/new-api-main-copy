@@ -27,6 +27,7 @@ import {
   TestTube,
   DollarSign,
   SortAsc,
+  ArrowUpDown,
   RefreshCw,
   ArrowUpFromLine,
 } from 'lucide-react'
@@ -51,6 +52,7 @@ import {
   handleUpdateAllBalances,
 } from '../lib'
 import { useChannels } from './channels-provider'
+import { ChannelPriorityDialog } from './dialogs/channel-priority-dialog'
 
 export function ChannelsPrimaryButtons() {
   const { t } = useTranslation()
@@ -65,6 +67,7 @@ export function ChannelsPrimaryButtons() {
   } = useChannels()
   const queryClient = useQueryClient()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showPriorityDialog, setShowPriorityDialog] = useState(false)
 
   const handleTagModeToggle = (checked: boolean) => {
     localStorage.setItem('enable-tag-mode', String(checked))
@@ -190,6 +193,15 @@ export function ChannelsPrimaryButtons() {
 
             <DropdownMenuSeparator />
 
+            <DropdownMenuItem onClick={() => setShowPriorityDialog(true)}>
+              {t('Channel Priority Order')}
+              <DropdownMenuShortcut>
+                <ArrowUpDown className='h-4 w-4' />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
             <DropdownMenuItem
               onClick={() => {
                 handleFixAbilities(queryClient, (_result) => {
@@ -221,6 +233,11 @@ export function ChannelsPrimaryButtons() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <ChannelPriorityDialog
+        open={showPriorityDialog}
+        onOpenChange={setShowPriorityDialog}
+      />
 
       <ConfirmDialog
         open={showDeleteDialog}

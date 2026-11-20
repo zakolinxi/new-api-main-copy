@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -38,6 +39,15 @@ type ChannelSettings struct {
 	// do not have to re-queue. It is pure data: business validation lives in the
 	// host module (model.Channel.ValidateSettings), keeping relaykit independent.
 	Queue *ChannelQueueSettings `json:"queue,omitempty"`
+	// RequestPatch rewrites the outbound JSON body and business headers of every
+	// request this channel serves. It is the effects array of the request patch
+	// contract: RFC 6902 objects under a "json.patch" effect and set/remove
+	// header names under a "header.patch" effect, applied all or nothing.
+	//
+	// The value is kept opaque here so relaykit stays independent: the host
+	// decodes and bounds it (pkg/requestpatch), and validates it on save
+	// (model.Channel.ValidateSettings). Unset means no rewrite at all.
+	RequestPatch json.RawMessage `json:"request_patch,omitempty"`
 }
 
 // ChannelQueueSettings configures the auto upstream queue warmer for a channel.

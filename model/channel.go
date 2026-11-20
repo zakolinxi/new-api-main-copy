@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/pkg/requestpatch"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting"
@@ -1135,6 +1136,14 @@ func (channel *Channel) ValidateSettings() error {
 	}
 	if err := channelParams.ValidateHTTPTransport(); err != nil {
 		return err
+	}
+	// The request_patch setting is opaque to relaykit and decoded by the relay
+	// on every request, so a malformed value has to be rejected here rather than
+	// turning into a runtime failure on every call through this channel.
+	if raw := strings.TrimSpace(string(channelParams.RequestPatch)); raw != "" && raw != "null" {
+		if _, err := requestpatch.DecodeEffects([]byte(raw)); err != nil {
+			return fmt.Errorf("invalid channel request_patch: %w", err)
+		}
 	}
 	channelOtherSettings := &dto.ChannelOtherSettings{}
 	if channel.OtherSettings != "" {
