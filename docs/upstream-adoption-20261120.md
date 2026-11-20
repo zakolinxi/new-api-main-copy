@@ -51,6 +51,7 @@
 | 配置 | 渠道 `setting` JSON 新增 `request_patch` 字段（`relaykit/dto.ChannelSettings.RequestPatch`，`json.RawMessage`，relaykit 只当不透明数据存）|
 | 生效点 | `relay/channel/api_request.go` 的 `DoApiRequest`：读完 body → 建好请求头 → 应用 effects → 再让 Header Override 覆盖 |
 | 语义 | `json.patch`（RFC 6902，含 add/remove/replace/move/copy/test）+ `header.patch`（set/remove）；`Apply` 是**全有或全无**，任一 op 被拒则整条请求不改 |
+| 适用范围 | `json.patch` 只对 **JSON 请求体**生效。无 body 的请求（GET/DELETE）和非 JSON 体（multipart/表单/纯文本）会自动只保留 `header.patch`，既不失败也不把 body 读进内存；`DoFormRequest` 路径不应用补丁 |
 | 边界 | body 上限走 `MAX_REQUEST_BODY_MB`（默认 128MB）；`Authorization` / `Host` / `Content-Length` / `Content-Type` / hop-by-hop 头受保护，改不动 |
 | 保存校验 | `model.Channel.ValidateSettings()` 在存库时就解码一遍，非法 effects 直接拒绝，不会拖到线上每个请求才炸 |
 | 测试 | `relay/channel/request_patch_test.go`（7 个用例）+ `model/channel_settings_test.go::TestChannelValidateSettingsChecksRequestPatch`（4 个子用例）→ **全部通过** |

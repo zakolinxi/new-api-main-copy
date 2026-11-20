@@ -65,7 +65,9 @@ func TestApplyRequestPatchRewritesBodyAndHeaders(t *testing.T) {
 	]`)})
 	require.NoError(t, err)
 
-	require.NoError(t, applyRequestPatch(req, []byte(`{"model":"m","temperature":0.9}`), effects))
+	rewritten, err := applyRequestPatch(req, []byte(`{"model":"m","temperature":0.9}`), effects)
+	require.NoError(t, err)
+	require.True(t, rewritten, "a json.patch effect must report the body it rewrote")
 
 	body, err := io.ReadAll(req.Body)
 	require.NoError(t, err)
@@ -92,7 +94,7 @@ func TestApplyRequestPatchRejectsProtectedHeader(t *testing.T) {
 		`[{"type":"header.patch","set":{"Authorization":"Bearer stolen"}}]`)})
 	require.NoError(t, err)
 
-	err = applyRequestPatch(req, body, effects)
+	_, err = applyRequestPatch(req, body, effects)
 	require.Error(t, err, "credentials and framing headers stay protected")
 	require.Contains(t, err.Error(), "protected")
 }
@@ -106,10 +108,64 @@ func TestApplyRequestPatchLeavesFramingOfHeaderOnlyPatch(t *testing.T) {
 		`[{"type":"header.patch","set":{"X-Trace":"channel"}}]`)})
 	require.NoError(t, err)
 
-	require.NoError(t, applyRequestPatch(req, nil, effects))
+	rewritten, err := applyRequestPatch(req, nil, effects)
+	require.NoError(t, err)
+	require.False(t, rewritten)
 	require.Equal(t, originalBody, req.Body, "a header-only patch must not replace the body")
 	require.Equal(t, int64(0), req.ContentLength)
 	require.Equal(t, "channel", req.Header.Get("X-Trace"))
+}
+
+// A channel configured with a json.patch is reached by bodyless and non-JSON
+// calls too (model lists, form uploads). Those must keep working with the
+// header effects applied, instead of failing on a document that does not exist.
+func TestApplyRequestPatchSkipsJSONPatchWithoutJSONBody(t *testing.T) {
+	tests := []struct {
+		name string
+		body []byte
+	}{
+		{name: "no body", body: nil},
+		{name: "empty body", body: []byte{}},
+		{name: "form body", body: []byte("grant_type=client_credentials&scope=read")},
+		{name: "truncated json", body: []byte(`{"model":`)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "https://upstream.test/v1/chat/completions", nil)
+
+			effects, err := ChannelRequestPatchEffects(dto.ChannelSettings{RequestPatch: json.RawMessage(`[
+				{"type":"json.patch","ops":[{"op":"replace","path":"/temperature","value":0.1}]},
+				{"type":"header.patch","set":{"X-Trace":"channel"}}
+			]`)})
+			require.NoError(t, err)
+
+			rewritten, err := applyRequestPatch(req, tt.body, effects)
+			require.NoError(t, err, "a missing JSON document must not fail the request")
+			require.False(t, rewritten)
+			require.Equal(t, "channel", req.Header.Get("X-Trace"), "header effects still apply")
+		})
+	}
+}
+
+func TestIsJSONRequestContentType(t *testing.T) {
+	for _, value := range []string{
+		"",
+		"application/json",
+		"application/json; charset=utf-8",
+		"text/json",
+		"application/vnd.api+json",
+	} {
+		require.True(t, isJSONRequestContentType(value), "value %q", value)
+	}
+	for _, value := range []string{
+		"multipart/form-data; boundary=x",
+		"application/x-www-form-urlencoded",
+		"application/octet-stream",
+		"not a media type",
+	} {
+		require.False(t, isJSONRequestContentType(value), "value %q", value)
+	}
 }
 
 func TestChannelRequestPatchEffectsIgnoresChannelsWithoutMeta(t *testing.T) {

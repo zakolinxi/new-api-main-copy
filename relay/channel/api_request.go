@@ -406,18 +406,26 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	logger.LogDebug(c, "fullRequestURL: %s", common.SanitizeURLForLog(fullRequestURL))
 	// A channel request_patch rewrites the outbound body, so the body has to be
 	// buffered before net/http takes it over. A channel without the setting
-	// keeps the original body reader untouched.
+	// keeps the original body reader untouched, and so does a request that is
+	// not JSON: a json.patch has no document to address there, and buffering a
+	// multipart or stream body would only cost memory.
 	patchEffects, err := channelRequestPatchEffects(info)
 	if err != nil {
 		return nil, err
 	}
 	var patchBody []byte
-	if len(patchEffects) > 0 {
-		patchBody, err = readRequestBodyForPatch(requestBody)
-		if err != nil {
-			return nil, types.NewError(err, types.ErrorCodeChannelRequestPatchInvalid)
+	if hasJSONPatchEffect(patchEffects) {
+		if !isJSONRequestContentType(c.Request.Header.Get("Content-Type")) {
+			patchEffects = headerOnlyEffects(patchEffects)
+		} else {
+			patchBody, err = readRequestBodyForPatch(requestBody)
+			if err != nil {
+				return nil, types.NewError(err, types.ErrorCodeChannelRequestPatchInvalid)
+			}
+			if patchBody != nil {
+				requestBody = bytes.NewReader(patchBody)
+			}
 		}
-		requestBody = bytes.NewReader(patchBody)
 	}
 	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
@@ -449,7 +457,7 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	// Apply the channel request patch before Header Override, so an
 	// administrator's explicit header override still wins over it.
 	if len(patchEffects) > 0 {
-		if err = applyRequestPatch(req, patchBody, patchEffects); err != nil {
+		if _, err = applyRequestPatch(req, patchBody, patchEffects); err != nil {
 			return nil, types.NewError(fmt.Errorf("apply channel request patch failed: %w", err), types.ErrorCodeChannelRequestPatchInvalid)
 		}
 	}
