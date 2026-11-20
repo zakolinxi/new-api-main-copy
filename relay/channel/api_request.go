@@ -457,8 +457,14 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	// Apply the channel request patch before Header Override, so an
 	// administrator's explicit header override still wins over it.
 	if len(patchEffects) > 0 {
-		if _, err = applyRequestPatch(req, patchBody, patchEffects); err != nil {
-			return nil, types.NewError(fmt.Errorf("apply channel request patch failed: %w", err), types.ErrorCodeChannelRequestPatchInvalid)
+		applied, _, patchErr := applyRequestPatch(req, patchBody, patchEffects)
+		if patchErr != nil {
+			return nil, types.NewError(fmt.Errorf("apply channel request patch failed: %w", patchErr), types.ErrorCodeChannelRequestPatchInvalid)
+		}
+		// A channel that rewrites models or messages must leave a trace: the
+		// consume log carries these lines into admin_info.
+		if audit := common.RequestPatchAuditLines(applied); len(audit) > 0 {
+			info.RequestPatchAudit = audit
 		}
 	}
 	// Apply Header Override last so it wins over every ordinary header emitted

@@ -20,7 +20,10 @@ type LogSetting struct {
 }
 
 var logSetting = LogSetting{
-	UserExportEnabled: true,
+	// Off by default: an export hands a regular user the whole log range in one
+	// response, which is a larger capability than the paged list they had
+	// before. A deployment that wants it turns it on explicitly.
+	UserExportEnabled: false,
 	MaxRangeDays:      365,
 }
 

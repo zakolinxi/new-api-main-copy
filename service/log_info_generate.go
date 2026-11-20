@@ -137,6 +137,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	appendFinalRequestFormat(relayInfo, other)
 	appendBillingInfo(relayInfo, other)
 	appendParamOverrideInfo(relayInfo, other)
+	appendRequestPatchInfo(relayInfo, other)
 	appendStreamStatus(relayInfo, other)
 	return other
 }
@@ -159,6 +160,19 @@ func appendParamOverrideInfo(relayInfo *relaycommon.RelayInfo, other *model.LogO
 		return
 	}
 	other.SetPublic("po", relayInfo.ParamOverrideAudit)
+}
+
+// appendRequestPatchInfo records what a channel's request_patch rewrote.
+//
+// It goes into admin_info rather than the public metadata: which parts of a
+// request a channel overrides is operator information, and the log owner has no
+// use for it. Administrators keep the trace needed to explain a bill or a
+// changed answer.
+func appendRequestPatchInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) {
+	if relayInfo == nil || other == nil || len(relayInfo.RequestPatchAudit) == 0 {
+		return
+	}
+	other.SetAdmin("rp", relayInfo.RequestPatchAudit)
 }
 
 func appendStreamStatus(relayInfo *relaycommon.RelayInfo, other *model.LogOther) {

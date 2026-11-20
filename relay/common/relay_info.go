@@ -210,6 +210,10 @@ type RelayInfo struct {
 	RuntimeHeadersOverride                map[string]any
 	UseRuntimeHeadersOverride             bool
 	ParamOverrideAudit                    []string
+	// RequestPatchAudit records the changes a channel's request_patch made to
+	// this attempt, so a rewritten model or message leaves a trace in the
+	// consume log. Admin-only: it is operator information, not log-owner data.
+	RequestPatchAudit []string
 
 	PriceData hosttypes.PriceData
 

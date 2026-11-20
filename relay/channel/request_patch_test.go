@@ -65,7 +65,7 @@ func TestApplyRequestPatchRewritesBodyAndHeaders(t *testing.T) {
 	]`)})
 	require.NoError(t, err)
 
-	rewritten, err := applyRequestPatch(req, []byte(`{"model":"m","temperature":0.9}`), effects)
+	_, rewritten, err := applyRequestPatch(req, []byte(`{"model":"m","temperature":0.9}`), effects)
 	require.NoError(t, err)
 	require.True(t, rewritten, "a json.patch effect must report the body it rewrote")
 
@@ -94,7 +94,7 @@ func TestApplyRequestPatchRejectsProtectedHeader(t *testing.T) {
 		`[{"type":"header.patch","set":{"Authorization":"Bearer stolen"}}]`)})
 	require.NoError(t, err)
 
-	_, err = applyRequestPatch(req, body, effects)
+	_, _, err = applyRequestPatch(req, body, effects)
 	require.Error(t, err, "credentials and framing headers stay protected")
 	require.Contains(t, err.Error(), "protected")
 }
@@ -108,7 +108,7 @@ func TestApplyRequestPatchLeavesFramingOfHeaderOnlyPatch(t *testing.T) {
 		`[{"type":"header.patch","set":{"X-Trace":"channel"}}]`)})
 	require.NoError(t, err)
 
-	rewritten, err := applyRequestPatch(req, nil, effects)
+	_, rewritten, err := applyRequestPatch(req, nil, effects)
 	require.NoError(t, err)
 	require.False(t, rewritten)
 	require.Equal(t, originalBody, req.Body, "a header-only patch must not replace the body")
@@ -140,7 +140,7 @@ func TestApplyRequestPatchSkipsJSONPatchWithoutJSONBody(t *testing.T) {
 			]`)})
 			require.NoError(t, err)
 
-			rewritten, err := applyRequestPatch(req, tt.body, effects)
+			_, rewritten, err := applyRequestPatch(req, tt.body, effects)
 			require.NoError(t, err, "a missing JSON document must not fail the request")
 			require.False(t, rewritten)
 			require.Equal(t, "channel", req.Header.Get("X-Trace"), "header effects still apply")
@@ -176,4 +176,58 @@ func TestChannelRequestPatchEffectsIgnoresChannelsWithoutMeta(t *testing.T) {
 	effects, err = channelRequestPatchEffects(&common.RelayInfo{})
 	require.NoError(t, err)
 	require.Empty(t, effects)
+}
+
+func relayInfoWithPatch(channelID int, raw string) *common.RelayInfo {
+	return &common.RelayInfo{
+		ChannelMeta: &common.ChannelMeta{
+			ChannelId:      channelID,
+			ChannelSetting: dto.ChannelSettings{RequestPatch: json.RawMessage(raw)},
+		},
+	}
+}
+
+// Decoding on every forwarded request would re-parse the whole effects array,
+// so the same setting must come back from the cache.
+func TestChannelRequestPatchEffectsAreCachedPerChannel(t *testing.T) {
+	raw := `[{"type":"json.patch","ops":[{"op":"replace","path":"/temperature","value":0.1}]}]`
+	info := relayInfoWithPatch(9001, raw)
+
+	first, err := channelRequestPatchEffects(info)
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+
+	second, err := channelRequestPatchEffects(info)
+	require.NoError(t, err)
+	require.Len(t, second, 1)
+	require.Same(t, &first[0], &second[0], "the decoded effects must come from the cache")
+}
+
+// A channel whose setting was edited has to be picked up without a restart.
+func TestChannelRequestPatchEffectsCacheFollowsTheSetting(t *testing.T) {
+	info := relayInfoWithPatch(9002, `[{"type":"header.patch","set":{"X-A":"1"}}]`)
+	first, err := channelRequestPatchEffects(info)
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+
+	info.ChannelMeta.ChannelSetting.RequestPatch = json.RawMessage(`[
+		{"type":"header.patch","set":{"X-A":"1"}},
+		{"type":"header.patch","set":{"X-B":"2"}}
+	]`)
+	second, err := channelRequestPatchEffects(info)
+	require.NoError(t, err)
+	require.Len(t, second, 2, "an edited setting invalidates the cached entry")
+}
+
+func TestChannelRequestPatchEffectsCachedPerChannelID(t *testing.T) {
+	raw := `[{"type":"header.patch","set":{"X-A":"1"}}]`
+
+	left, err := channelRequestPatchEffects(relayInfoWithPatch(9003, raw))
+	require.NoError(t, err)
+	right, err := channelRequestPatchEffects(relayInfoWithPatch(9004, raw))
+	require.NoError(t, err)
+
+	require.Len(t, left, 1)
+	require.Len(t, right, 1)
+	require.NotSame(t, &left[0], &right[0], "two channels keep their own entry")
 }

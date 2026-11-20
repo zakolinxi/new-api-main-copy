@@ -34,6 +34,7 @@
 | 上游组件 | `service/log_export.go`（Redis/内存双实现的导出互斥锁）、`setting/operation_setting/log_setting.go`（`user_export_enabled` / `max_range_days`） |
 | 格式 | NDJSON，一行一条，末尾追加 `{"success":true,"data":{"count":N}}`；`X-Accel-Buffering: no` 让 nginx 不缓冲 |
 | 安全 | 每用户同时只允许一个导出（跨节点靠 Redis 锁，1 分钟租约自动过期）；时间范围被 `max_range_days` 裁剪；单次上限 10 万行；沿用列表的字段脱敏（`FormatAdminLogs` / `FormatRootLogs` / `FormatUserLogsForExport`） |
+| 默认值 | `user_export_enabled` **默认关闭**（上游默认开启）。导出会把整段时间的日志一次给出去，是比"分页翻"更大的能力，所以改成显式开启；管理员始终可导出 |
 
 ### 3. 消息与日志的 i18n 基础件（被上面两项依赖）
 
@@ -54,7 +55,9 @@
 | 适用范围 | `json.patch` 只对 **JSON 请求体**生效。无 body 的请求（GET/DELETE）和非 JSON 体（multipart/表单/纯文本）会自动只保留 `header.patch`，既不失败也不把 body 读进内存；`DoFormRequest` 路径不应用补丁 |
 | 边界 | body 上限走 `MAX_REQUEST_BODY_MB`（默认 128MB）；`Authorization` / `Host` / `Content-Length` / `Content-Type` / hop-by-hop 头受保护，改不动 |
 | 保存校验 | `model.Channel.ValidateSettings()` 在存库时就解码一遍，非法 effects 直接拒绝，不会拖到线上每个请求才炸 |
-| 测试 | `relay/channel/request_patch_test.go`（7 个用例）+ `model/channel_settings_test.go::TestChannelValidateSettingsChecksRequestPatch`（4 个子用例）→ **全部通过** |
+| 审计 | 改敏感路径（messages/model/reasoning…）或任何 header 时，往消费日志的 `other.admin_info.rp` 写一行，例如 `request_patch: replace messages.0.content`。路径会从 RFC 6902 的 `/a/b` 转成 `param_override` 那套 `a.b` 点号形式，管理员不用两种写法对照。**值永不记录**（值里可能是用户内容），单次上限 32 行 |
+| 缓存 | 解码结果按渠道 id + setting 原文缓存（`sync.Map`），改配置后下一个请求即生效，不需重启 |
+| 测试 | `relay/channel/request_patch_test.go`（10 个用例）+ `relay/common/request_patch_audit_test.go`（7 个）+ `model/channel_settings_test.go::TestChannelValidateSettingsChecksRequestPatch`（4 个子用例）→ **全部通过** |
 
 **与上游的差别（有意）**：上游的 effects 来自 JS 渠道插件的 `prepareRequest` 钩子，那套宿主本地没有；
 这里把生产者换成**渠道级配置**，于是同一个 `requestpatch` 库在本地就有了实际用途，且不引入 JS 引擎。
@@ -108,7 +111,8 @@ go build -buildvcs=false ./...                      → 通过
 go vet ./relay/channel ./model ./setting            → 通过
 go test ./common ./setting/... ./service ./middleware ./router ./relay/channel ./relay/common
                                                     → 除两个既存失败外全绿
-go test -run RequestPatch ./relay/channel/          → 7 个用例通过
+go test -run RequestPatch ./relay/channel/          → 10 个用例通过
+go test -run RequestPatchAudit ./relay/common/      → 7 个用例通过
 go test -run TestChannelValidateSettings ./model/   → 通过（含 request_patch 校验 4 个子用例）
 web/default: tsgo -b                                → 本次改动的文件无类型错误（auth/lobe-icon 的报错是既存）
 web/default: rsbuild build                          → 通过（Total 60543.8 kB）
@@ -188,6 +192,8 @@ router/api-router.go                 +2 条路由（log/export、log/self/export
 model/channel.go                     ChannelSortOptions.Apply 用 COALESCE + id DESC 兜底
                                      ValidateSettings 增加 request_patch 解码校验
 model/option.go                      TokenKeyPrefix 三件套 + 默认值注册
+relay/common/request_patch_audit.go  request_patch 审计行（RFC 6902 路径转点号）
+relay/common/request_patch_audit_test.go
 middleware/auth.go                   trim 改走 setting.TrimTokenKeyPrefix（3 处）
 controller/token.go                 同上
 model/token.go                      同上

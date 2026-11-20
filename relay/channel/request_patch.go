@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/QuantumNous/new-api/pkg/requestpatch"
 	"github.com/QuantumNous/new-api/relay/common"
@@ -35,14 +36,52 @@ func ChannelRequestPatchEffects(setting dto.ChannelSettings) ([]requestpatch.Eff
 	return effects, nil
 }
 
+// cachedRequestPatch holds the decoded effects of one channel's setting.
+//
+// Decoding on every forwarded request would re-parse up to 32 effects and 512
+// operations per call. The cache is keyed by channel id and invalidated by
+// comparing the raw setting text, so an edited channel is picked up on the next
+// request without restarting the node.
+type cachedRequestPatch struct {
+	raw     string
+	effects []requestpatch.Effect
+}
+
+var requestPatchCache sync.Map // map[int]cachedRequestPatch
+
 // channelRequestPatchEffects is the request-scoped form of
 // ChannelRequestPatchEffects. A relayed request without channel metadata, or
 // whose channel has no request_patch, yields no effects.
+//
+// The returned slice is shared with the cache and must be treated as read-only;
+// the applier builds a filtered copy whenever it has to drop an effect.
 func channelRequestPatchEffects(info *common.RelayInfo) ([]requestpatch.Effect, error) {
 	if info == nil || info.ChannelMeta == nil {
 		return nil, nil
 	}
-	return ChannelRequestPatchEffects(info.ChannelMeta.ChannelSetting)
+	setting := info.ChannelMeta.ChannelSetting
+	raw := string(bytes.TrimSpace(setting.RequestPatch))
+	if raw == "" || raw == "null" {
+		return nil, nil
+	}
+
+	channelID := info.ChannelMeta.ChannelId
+	if cached, ok := requestPatchCache.Load(channelID); ok {
+		entry := cached.(cachedRequestPatch)
+		if entry.raw == raw {
+			return entry.effects, nil
+		}
+	}
+
+	effects, err := ChannelRequestPatchEffects(setting)
+	if err != nil {
+		// A malformed setting is validated on save, so reaching this means the
+		// row was edited directly. Do not cache it: the next write should be
+		// observed without a restart.
+		return nil, err
+	}
+	requestPatchCache.Store(channelID, cachedRequestPatch{raw: raw, effects: effects})
+	return effects, nil
 }
 
 // isJSONRequestContentType reports whether a JsonPatch effect has a document to
@@ -116,23 +155,27 @@ func readRequestBodyForPatch(body io.Reader) ([]byte, error) {
 // and leaves req untouched, so a bad channel setting can never send a half
 // patched request upstream. The body is only replaced when a json.patch effect
 // is actually applied; a header-only setting keeps the original reader
-// and framing. Returns whether the body was rewritten.
-func applyRequestPatch(req *http.Request, body []byte, effects []requestpatch.Effect) (bool, error) {
+// and framing.
+//
+// applied reports the effects that took part, so the audit trail records what
+// happened rather than what was configured, and bodyRewritten reports whether
+// the body changed.
+func applyRequestPatch(req *http.Request, body []byte, effects []requestpatch.Effect) (applied []requestpatch.Effect, bodyRewritten bool, err error) {
+	applied = effects
 	// A body-less request (GET, DELETE) or one that is not a JSON document has
 	// nowhere to apply a json.patch. Keeping only the header effects is what
 	// stops such a call from failing on a channel configured for JSON calls.
 	if len(body) == 0 || !gjson.ValidBytes(body) {
-		effects = headerOnlyEffects(effects)
-		if len(effects) == 0 {
-			return false, nil
+		applied = headerOnlyEffects(effects)
+		if len(applied) == 0 {
+			return nil, false, nil
 		}
 	}
-	patchedBody, patchedHeader, err := requestpatch.Apply(body, req.Header, effects, requestpatch.IsProtectedHeader)
+	patchedBody, patchedHeader, err := requestpatch.Apply(body, req.Header, applied, requestpatch.IsProtectedHeader)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
-	bodyRewritten := false
-	for _, effect := range effects {
+	for _, effect := range applied {
 		if effect.Type != requestpatch.EffectJSONPatch {
 			continue
 		}
@@ -146,5 +189,5 @@ func applyRequestPatch(req *http.Request, body []byte, effects []requestpatch.Ef
 		break
 	}
 	req.Header = patchedHeader
-	return bodyRewritten, nil
+	return applied, bodyRewritten, nil
 }
