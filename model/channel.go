@@ -62,6 +62,9 @@ type Channel struct {
 	ParamOverride  *string `json:"param_override" gorm:"type:text"`
 	HeaderOverride *string `json:"header_override" gorm:"type:text"`
 	Remark         *string `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
+	// ScheduledDisableAt 定时下线时间（unix 秒），0 表示未设置。
+	// 到点后由后台任务把渠道置为手动停用并清空该字段，避免管理员重新启用后又被立刻下线。
+	ScheduledDisableAt int64 `json:"scheduled_disable_at" gorm:"bigint;default:0;index"`
 	// add after v0.8.5
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 

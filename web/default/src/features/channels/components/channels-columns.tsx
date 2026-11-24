@@ -945,6 +945,31 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
             }
           }
 
+          // Enabled channels with a pending schedule: surface the time as a tooltip
+          const scheduledDisableAt = Number(channel.scheduled_disable_at) || 0
+          if (status === 1 && scheduledDisableAt > 0) {
+            return (
+              <TooltipProvider delay={100}>
+                <Tooltip>
+                  <TooltipTrigger render={<span />}>
+                    <StatusBadge
+                      label={label}
+                      variant={config.variant}
+                      size='sm'
+                      copyable={false}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side='top' className='max-w-xs'>
+                    <div className='text-xs'>
+                      {t('Scheduled disable at')}{' '}
+                      {formatTimestampToDate(scheduledDisableAt)}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )
+          }
+
           return (
             <StatusBadge
               label={label}

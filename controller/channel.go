@@ -556,6 +556,19 @@ func GetChannelKey(c *gin.Context) {
 // extended with; it comfortably covers every built-in and installed plugin.
 const maxTaskExtendPluginKeys = 32
 
+// 定时下线时间必须是将来时刻；0 表示不设置 / 取消计划。
+// 只填日期时前端按当天 00:00 换算，因此选择今天就等于一个已经过去的时间点，
+// 这里统一拒绝，避免渠道「刚保存就被下线」。
+func validateScheduledDisableAt(timestamp int64) error {
+	if timestamp <= 0 {
+		return nil
+	}
+	if timestamp <= common.GetTimestamp() {
+		return errors.New("定时下线时间必须晚于当前时间")
+	}
+	return nil
+}
+
 // validateChannel 通用的渠道校验函数
 func validateChannel(channel *model.Channel, isAdd bool) error {
 	if channel == nil {
@@ -792,6 +805,13 @@ func AddChannel(c *gin.Context) {
 		(addChannelRequest.Channel.BaseURL == nil || strings.TrimSpace(*addChannelRequest.Channel.BaseURL) == "")
 	// 使用统一的校验函数
 	if err := validateChannel(addChannelRequest.Channel, true); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	if err := validateScheduledDisableAt(addChannelRequest.Channel.ScheduledDisableAt); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -1232,6 +1252,16 @@ func UpdateChannel(c *gin.Context) {
 			"message": err.Error(),
 		})
 		return
+	}
+	// 只有请求里显式带了该字段才校验，避免历史遗留的过期值把整条渠道卡成不可编辑。
+	if _, ok := requestData["scheduled_disable_at"]; ok {
+		if err := validateScheduledDisableAt(channel.ScheduledDisableAt); err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
 	}
 	originProxy := originChannel.GetSetting().Proxy
 	_, settingProvided := requestData["setting"]
@@ -1757,6 +1787,8 @@ func CopyChannel(c *gin.Context) {
 	clone.Id = 0     // let DB auto-generate
 	clone.AutoPriceGuardID = 0
 	clone.ConfigRevision = 1
+	// 定时下线属于单条渠道的一次性计划，复制出来的新渠道不应继承。
+	clone.ScheduledDisableAt = 0
 	clone.CreatedTime = common.GetTimestamp()
 	clone.Name = origin.Name + suffix
 	clone.TestTime = 0

@@ -94,6 +94,7 @@ import SecureVerificationModal from '../../../common/modals/SecureVerificationMo
 import StatusCodeRiskGuardModal from './StatusCodeRiskGuardModal';
 import ChannelKeyDisplay from '../../../common/ui/ChannelKeyDisplay';
 import { useSecureVerification } from '../../../../hooks/common/useSecureVerification';
+import { timestamp2string } from '../../../../helpers';
 import { parseChannelConnectionString } from '../../../../helpers/token';
 import { createApiCalls } from '../../../../services/secureVerification';
 import {
@@ -229,6 +230,8 @@ const EditChannelModal = (props) => {
     groups: ['default'],
     priority: 0,
     weight: 0,
+    // 定时下线：表单里是日期字符串，提交时换算成 unix 秒；空字符串表示不设置
+    scheduled_disable_at: '',
     tag: '',
     multi_key_mode: 'random',
     // 渠道额外设置的默认值
@@ -1168,7 +1171,13 @@ const EditChannelModal = (props) => {
       // 按模型并发存放在 settings.model_concurrency，需要单独还原成可编辑的行。
       setModelConcurrencyRows(extractModelConcurrencyRows(data.settings));
       if (formApiRef.current) {
-        formApiRef.current.setValues(data);
+        formApiRef.current.setValues({
+          ...data,
+          scheduled_disable_at: data.scheduled_disable_at
+            ? // 控件格式是 yyyy-MM-dd HH:mm，这里截掉秒避免回填时格式不匹配
+              timestamp2string(Number(data.scheduled_disable_at)).slice(0, 16)
+            : '',
+        });
       }
       if (data.auto_ban === 0) {
         setAutoBan(false);
@@ -1223,6 +1232,7 @@ const EditChannelModal = (props) => {
         (data.priority && data.priority !== 0) ||
         (data.weight && data.weight !== 0) ||
         (data.concurrency !== undefined && data.concurrency !== null) ||
+        (data.scheduled_disable_at && Number(data.scheduled_disable_at) > 0) ||
         (data.proxy && data.proxy.trim()) ||
         (data.system_prompt && data.system_prompt.trim()) ||
         data.thinking_to_content ||
@@ -2177,6 +2187,29 @@ const EditChannelModal = (props) => {
     });
 
     let res;
+    // 定时下线：表单值可能是 "2026-12-01 09:30"、只有日期的 "2026-12-01" 或空。
+    // 空值一律按「不设置」提交 0；只有日期时 Date.parse 得到当天 00:00，即零点下线。
+    const rawScheduledDisableAt = localInputs.scheduled_disable_at;
+    let scheduledDisableAt = 0;
+    if (typeof rawScheduledDisableAt === 'number') {
+      scheduledDisableAt = rawScheduledDisableAt > 0 ? rawScheduledDisableAt : 0;
+    } else if (rawScheduledDisableAt) {
+      const parsedScheduledDisableAt = Date.parse(rawScheduledDisableAt);
+      if (Number.isNaN(parsedScheduledDisableAt)) {
+        showInfo(t('定时下线时间格式错误'));
+        return;
+      }
+      scheduledDisableAt = Math.floor(parsedScheduledDisableAt / 1000);
+    }
+    if (
+      scheduledDisableAt > 0 &&
+      scheduledDisableAt <= Math.floor(Date.now() / 1000)
+    ) {
+      showInfo(t('定时下线时间必须晚于当前时间'));
+      return;
+    }
+    localInputs.scheduled_disable_at = scheduledDisableAt;
+
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
     localInputs.models = localInputs.models.join(',');
     localInputs.group = (localInputs.groups || []).join(',');
@@ -2835,6 +2868,22 @@ const EditChannelModal = (props) => {
                       />
                     </Col>
                   </Row>
+
+                  <Form.DatePicker
+                    field='scheduled_disable_at'
+                    label={t('定时下线')}
+                    type='dateTime'
+                    format='yyyy-MM-dd HH:mm'
+                    placeholder={t('留空表示不设置')}
+                    showClear
+                    style={{ width: '100%' }}
+                    onChange={(value) =>
+                      handleInputChange('scheduled_disable_at', value)
+                    }
+                    extraText={t(
+                      '到点后该渠道会自动停用（状态变为已禁用）并清除本条计划，重新上线请手动启用。只填写日期时按当天 00:00 计算。',
+                    )}
+                  />
 
                   {inputs.type === 1 && (
                     <>

@@ -209,6 +209,13 @@ func updateChannelStatusesTx(tx *gorm.DB, ids []int, status int, trigger Channel
 		}
 		item := ChannelStatusMutationResult{ChannelID: id, OldStatus: current.Status, NewStatus: status}
 		if current.Status == status {
+			// 手动启用隐含「取消定时下线」：否则旧计划会在下一轮扫描里把它重新关掉。
+			if status == common.ChannelStatusEnabled && current.ScheduledDisableAt != 0 {
+				if err := tx.Model(&model.Channel{}).Where("id = ?", id).
+					Update("scheduled_disable_at", 0).Error; err != nil {
+					return nil, err
+				}
+			}
 			result.Channels = append(result.Channels, item)
 			continue
 		}
@@ -223,9 +230,13 @@ func updateChannelStatusesTx(tx *gorm.DB, ids []int, status int, trigger Channel
 		if current.ConfigRevision < 1 {
 			current.ConfigRevision = 1
 		}
-		if err := tx.Model(&model.Channel{}).Where("id = ?", id).Updates(map[string]any{
+		statusUpdates := map[string]any{
 			"status": status, "auto_price_guard_id": int64(0), "config_revision": current.ConfigRevision,
-		}).Error; err != nil {
+		}
+		if status == common.ChannelStatusEnabled {
+			statusUpdates["scheduled_disable_at"] = 0
+		}
+		if err := tx.Model(&model.Channel{}).Where("id = ?", id).Updates(statusUpdates).Error; err != nil {
 			return nil, err
 		}
 		if err := tx.Model(&model.Ability{}).Where("channel_id = ?", id).Update("enabled", status == common.ChannelStatusEnabled).Error; err != nil {
@@ -467,6 +478,9 @@ func UpdateChannelAdminPatchTx(tx *gorm.DB, input ChannelAdminPatchInput) (*Chan
 			next.HeaderOverride = input.Patch.HeaderOverride
 		case "remark":
 			next.Remark = input.Patch.Remark
+		case "scheduled_disable_at":
+			// 显式写入（含 0 = 取消定时），不能用指针兜底，否则取消计划会失效。
+			next.ScheduledDisableAt = input.Patch.ScheduledDisableAt
 		case "channel_info":
 			next.ChannelInfo.IsMultiKey, next.ChannelInfo.MultiKeySize, next.ChannelInfo.MultiKeyMode = input.Patch.ChannelInfo.IsMultiKey, input.Patch.ChannelInfo.MultiKeySize, input.Patch.ChannelInfo.MultiKeyMode
 		case "multi_key_mode":
@@ -874,7 +888,8 @@ func updateAdministratorChannelTx(tx *gorm.DB, channel *model.Channel) error {
 		"group": desired.Group, "model_mapping": desired.ModelMapping, "status_code_mapping": desired.StatusCodeMapping,
 		"priority": desired.Priority, "concurrency": desired.Concurrency, "auto_ban": desired.AutoBan, "other_info": desired.OtherInfo, "tag": desired.Tag,
 		"setting": desired.Setting, "param_override": desired.ParamOverride, "header_override": desired.HeaderOverride, "remark": desired.Remark,
-		"channel_info": desired.ChannelInfo, "settings": desired.OtherSettings, "auto_price_guard_id": int64(0), "config_revision": desired.ConfigRevision,
+		"scheduled_disable_at": desired.ScheduledDisableAt,
+		"channel_info":         desired.ChannelInfo, "settings": desired.OtherSettings, "auto_price_guard_id": int64(0), "config_revision": desired.ConfigRevision,
 	}
 	if err := tx.Model(&model.Channel{}).Where("id = ?", desired.Id).Updates(values).Error; err != nil {
 		return err
@@ -903,10 +918,11 @@ type channelAdminConfigSnapshot struct {
 	IsMultiKey                                          bool
 	MultiKeySize                                        int
 	MultiKeyMode                                        interface{}
+	ScheduledDisableAt                                  int64
 }
 
 func adminConfigSnapshot(c model.Channel) channelAdminConfigSnapshot {
 	return channelAdminConfigSnapshot{c.Type, c.Key, c.OpenAIOrganization, c.TestModel, c.Name, c.Weight, c.BaseURL, c.Other, c.Models, c.Group,
 		c.ModelMapping, c.StatusCodeMapping, c.Priority, c.Concurrency, c.AutoBan, c.OtherInfo, c.Tag, c.Setting, c.ParamOverride, c.HeaderOverride, c.Remark,
-		c.OtherSettings, c.ChannelInfo.IsMultiKey, c.ChannelInfo.MultiKeySize, c.ChannelInfo.MultiKeyMode}
+		c.OtherSettings, c.ChannelInfo.IsMultiKey, c.ChannelInfo.MultiKeySize, c.ChannelInfo.MultiKeyMode, c.ScheduledDisableAt}
 }

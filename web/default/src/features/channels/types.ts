@@ -64,6 +64,8 @@ export const channelSchema = z.object({
   param_override: z.string().nullish(),
   header_override: z.string().nullish(),
   remark: z.string().default(''),
+  // 定时下线时间（unix 秒），0 表示未设置
+  scheduled_disable_at: z.number().default(0),
   max_input_tokens: z.number().default(0),
   channel_info: channelInfoSchema.default({
     is_multi_key: false,

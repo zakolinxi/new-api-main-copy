@@ -497,6 +497,20 @@ export const getChannelsColumns = ({
       title: t('状态'),
       dataIndex: 'status',
       render: (text, record, index) => {
+        const scheduledDisableAt = Number(record.scheduled_disable_at) || 0;
+        // 只在「启用中且设置了计划」时提示，已停用的渠道再显示计划只会造成困惑
+        const scheduledDisableTag =
+          text === 1 && scheduledDisableAt > 0 ? (
+            <Tooltip
+              content={t('将于 {{time}} 自动下线', {
+                time: timestamp2string(scheduledDisableAt),
+              })}
+            >
+              <Tag color='orange' type='ghost' shape='circle'>
+                {t('定时下线')}
+              </Tag>
+            </Tooltip>
+          ) : null;
         if (text === 3) {
           if (record.other_info === '') {
             record.other_info = '{}';
@@ -506,17 +520,25 @@ export const getChannelsColumns = ({
           let time = otherInfo['status_time'];
           return (
             <div>
-              <Tooltip
-                content={
-                  t('原因：') + reason + t('，时间：') + timestamp2string(time)
-                }
-              >
-                {renderStatus(text, record.channel_info, t)}
-              </Tooltip>
+              <Space>
+                <Tooltip
+                  content={
+                    t('原因：') + reason + t('，时间：') + timestamp2string(time)
+                  }
+                >
+                  {renderStatus(text, record.channel_info, t)}
+                </Tooltip>
+                {scheduledDisableTag}
+              </Space>
             </div>
           );
         } else {
-          return renderStatus(text, record.channel_info, t);
+          return (
+            <Space>
+              {renderStatus(text, record.channel_info, t)}
+              {scheduledDisableTag}
+            </Space>
+          );
         }
       },
     },

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
+import dayjs from 'dayjs'
 import {
   CHANNEL_STATUS,
   ERROR_MESSAGES,
@@ -163,6 +164,18 @@ export const channelFormSchema = z
       .string()
       .max(255, 'Remark must be less than 255 characters')
       .optional(),
+    // 定时下线：接受 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:mm"，只填日期按当天 00:00 处理
+    scheduled_disable_at: z
+      .string()
+      .optional()
+      .refine(
+        (value) => !value || dayjs(value).isValid(),
+        'Scheduled disable time must be a valid date'
+      )
+      .refine(
+        (value) => !value || dayjs(value).valueOf() > Date.now(),
+        'Scheduled disable time must be in the future'
+      ),
     setting: z
       .string()
       .optional()
@@ -356,6 +369,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   status_code_mapping: '',
   tag: '',
   remark: '',
+  scheduled_disable_at: '',
   setting: '',
   param_override: '',
   header_override: '',
@@ -499,6 +513,9 @@ export function transformChannelToFormDefaults(
     status_code_mapping: channel.status_code_mapping || '',
     tag: channel.tag || '',
     remark: channel.remark || '',
+    scheduled_disable_at: channel.scheduled_disable_at
+      ? dayjs(channel.scheduled_disable_at * 1000).format('YYYY-MM-DD HH:mm')
+      : '',
     setting: channel.setting || '',
     param_override: channel.param_override || '',
     header_override: channel.header_override || '',
@@ -719,6 +736,18 @@ export function buildModelConcurrencyMap(
   return result
 }
 
+/**
+ * 定时下线时间：接受 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:mm"，只填日期时按当天 00:00 计算。
+ * 返回 unix 秒；空值或非法值返回 0（表示不设置）。
+ */
+export function parseScheduledDisableAt(value?: string): number {
+  const trimmed = String(value || '').trim()
+  if (!trimmed) return 0
+  const parsed = dayjs(trimmed)
+  if (!parsed.isValid()) return 0
+  return Math.floor(parsed.valueOf() / 1000)
+}
+
 function normalizeBaseUrl(value: string | undefined): string {
   return String(value || '')
     .trim()
@@ -753,6 +782,7 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
+    scheduled_disable_at: parseScheduledDisableAt(formData.scheduled_disable_at),
     setting: buildSettingJSON(formData),
     param_override: formData.param_override || null,
     header_override: formData.header_override || null,
@@ -801,6 +831,7 @@ export function transformFormDataToUpdatePayload(
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
+    scheduled_disable_at: parseScheduledDisableAt(formData.scheduled_disable_at),
     setting: buildSettingJSON(formData),
     param_override: formData.param_override || null,
     header_override: formData.header_override || null,

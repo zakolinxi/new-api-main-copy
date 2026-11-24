@@ -217,6 +217,7 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.status_code_mapping?.trim() ||
     values.tag?.trim() ||
     values.remark?.trim() ||
+    values.scheduled_disable_at?.trim() ||
     values.priority ||
     values.weight ||
     (values.concurrency !== null && values.concurrency !== undefined) ||
@@ -2661,6 +2662,28 @@ export function ChannelMutateDrawer({
                             )}
                           />
                         </div>
+
+                        <FormField
+                          control={form.control}
+                          name='scheduled_disable_at'
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('Scheduled disable')}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder='2026-12-01 00:00'
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                {t(
+                                  'Accepts YYYY-MM-DD or YYYY-MM-DD HH:mm; a date-only value goes offline at 00:00. The channel is disabled automatically when the time is reached, re-enable it manually to bring it back.'
+                                )}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
                         <FormField
                           control={form.control}
