@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Button, Typography, Tag, Space } from '@douyinfe/semi-ui';
 import { RedeemPanel } from './GameModal';
 import { usePhaserGame } from './usePhaserGame';
+import { useRedeemableScore } from './useRedeemableScore';
 
 const { Text } = Typography;
 
@@ -11,7 +12,7 @@ const VIEW = GRID * CELL;
 
 // Phaser 引擎版贪吃蛇：补间平滑移动、粒子吞食特效、震屏死亡、金色食物
 const SnakeGame = ({ t }) => {
-  const [score, setScore] = useState(0);
+  const { score, sync: syncScore, settle: settleScore } = useRedeemableScore();
   const [speedLevel, setSpeedLevel] = useState(1);
   const [status, setStatus] = useState('idle'); // idle | running | paused | over
   const [golden, setGolden] = useState(false);
@@ -19,7 +20,7 @@ const SnakeGame = ({ t }) => {
   const gameCmdRef = useRef({ cmd: null });
 
   const hooks = useRef({
-    onScore: (n) => { scoreRef.current = n; setScore(n); },
+    onScore: (n) => { scoreRef.current = n; syncScore(n); },
     onSpeed: (lv) => setSpeedLevel(lv),
     onStatus: (s) => setStatus(s),
     onGolden: (g) => setGolden(g),
@@ -280,7 +281,7 @@ const SnakeGame = ({ t }) => {
       <Text type='secondary' className='block mt-2 text-center'>
         {t('方向键控制 · 空格暂停 · 普通食物 +100 · 金色 +500（限时 6 秒）· 引擎驱动物理与特效')}
       </Text>
-      <RedeemPanel gameKey='snake' score={score} onRedeemed={() => { setScore(0); }} t={t} />
+      <RedeemPanel gameKey='snake' score={score} onRedeemed={settleScore} t={t} />
     </div>
   );
 };

@@ -1375,6 +1375,8 @@ function continueGame(){
 }
 
 function gameOver(){
+  // 同一帧内多次致命伤害会重复调用，重复上报会让外层把同一局分数累加多次
+  if(state==="gameover")return;
   state="gameover";
   best=Math.max(best,score);
   localStorage.neonPulseBest=best;

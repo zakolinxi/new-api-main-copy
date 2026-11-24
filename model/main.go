@@ -440,6 +440,13 @@ func migrateDB() error {
 			return err
 		}
 	}
+	// 游戏模块的表之前没有随启动迁移，全新部署会直接报「表不存在」，这里补上建表与种子数据。
+	if err := InitGameConfigs(); err != nil {
+		return fmt.Errorf("migrate game configs: %w", err)
+	}
+	if err := InitGameStocks(); err != nil {
+		return fmt.Errorf("migrate game stocks: %w", err)
+	}
 	return nil
 }
 

@@ -127,6 +127,9 @@ func main() {
 	// 数据看板
 	go model.UpdateQuotaData()
 
+	// 游戏股市行情推进：每 20 秒尝试写一根分钟K线，非交易时段自动跳过
+	go model.StartGameStockMarket()
+
 	if os.Getenv("CHANNEL_UPDATE_FREQUENCY") != "" {
 		frequency, err := strconv.Atoi(os.Getenv("CHANNEL_UPDATE_FREQUENCY"))
 		if err != nil {

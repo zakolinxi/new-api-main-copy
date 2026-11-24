@@ -136,9 +136,12 @@ const RoguelikeBoard = ({ t }) => {
       <RedeemPanel
         gameKey='roguelike'
         score={score}
-        onRedeemed={() => {
-          localStorage.removeItem(EARNED_KEY);
-          setScore(0);
+        onRedeemed={(amount) => {
+          // 按实际兑换掉的分数扣减，剩下的余额继续留在本机
+          const left = Math.max(0, Math.floor(score) - amount);
+          if (left > 0) localStorage.setItem(EARNED_KEY, String(left));
+          else localStorage.removeItem(EARNED_KEY);
+          setScore(left);
         }}
         t={t}
       />

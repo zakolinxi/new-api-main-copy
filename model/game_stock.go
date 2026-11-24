@@ -156,6 +156,10 @@ func GetGameStockById(id int) (*GameStock, error) {
 }
 
 func clampPrice(price float64, prevClose float64) float64 {
+	// 昨收缺失（0）时不做涨跌停限制，否则价格会被压成 0，后续成交价、合约规模全部异常
+	if prevClose <= 0 {
+		return price
+	}
 	upper := prevClose * (1 + StockPriceLimitPct)
 	lower := prevClose * (1 - StockPriceLimitPct)
 	if price > upper {
@@ -167,9 +171,18 @@ func clampPrice(price float64, prevClose float64) float64 {
 	return price
 }
 
+// corporateActionsEnabled 是随机公司行为的开关，仅测试用来关闭随机分红/拆股，
+// 否则价格断言会因 0.4% 的随机拆股概率偶发失败。
+var corporateActionsEnabled = true
+
 // AdvanceGameStockTick 推进一根1分钟K线（仅在交易阶段为 open 时调用）。
 func AdvanceGameStockTick() {
-	now := time.Now()
+	advanceGameStockTickAt(time.Now())
+}
+
+// advanceGameStockTickAt 是 AdvanceGameStockTick 的可注入时间版本，便于测试非交易时段、
+// 开盘缺口、同一分钟幂等等行为。
+func advanceGameStockTickAt(now time.Time) {
 	if GetStockPhase(now) != StockPhaseOpen {
 		return
 	}
@@ -180,7 +193,11 @@ func AdvanceGameStockTick() {
 		return
 	}
 	advanced := false
+	openedToday := false
 	for _, stock := range stocks {
+		if stock.Delisted {
+			continue // 退市后价格锁定在收购价，不再生成K线
+		}
 		var lastKline GameStockKline
 		err := DB.Where("stock_id = ? AND ts = ?", stock.Id, ts).First(&lastKline).Error
 		if err == nil {
@@ -193,6 +210,7 @@ func AdvanceGameStockTick() {
 		var todayFirst GameStockKline
 		hasToday := DB.Where("stock_id = ? AND ts >= ?", stock.Id, todayStart).First(&todayFirst).Error == nil
 		if !hasToday {
+			openedToday = true
 			gap := rand.Float64() * 0.01
 			openPrice = clampPrice(stock.PrevClose*(1+gap), stock.PrevClose)
 			stock.LastPrice = openPrice
@@ -267,11 +285,34 @@ func AdvanceGameStockTick() {
 	// 事件引擎：新闻事件与宏观事件随新K线触发，避免20秒tick在同一分钟重复触发
 	if advanced {
 		MaybeTriggerStockEvents(stocks, now)
-		// 公司行为（分红/拆股/并购退市）：极低概率
-		TriggerCorporateActions(now)
+		// 公司行为（分红/拆股/并购退市）只在当天第一根K线时掷一次骰子。
+		// TriggerCorporateActions 里的概率是「每日」量级，按 tick 每分钟掷一次的话，
+		// 每只股票几天内就会被收购退市，整个股市会直接玩废。
+		if openedToday && corporateActionsEnabled {
+			TriggerCorporateActions(now)
+		}
 	}
 }
 
+// StartGameStockMarket 启动行情推进循环：每 20 秒尝试写一根分钟 K 线，非交易时段直接返回。
+// 之前没有任何地方调用 AdvanceGameStockTick，导致股市完全没有行情（K 线永远为空、价格停在上市价）。
+// 多实例部署时由 (stock_id, ts) 唯一索引兜底，同一分钟只会有一个实例写入成功。
+func StartGameStockMarket() {
+	ticker := time.NewTicker(20 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					common.SysError(fmt.Sprintf("game stock tick panic: %v", r))
+				}
+			}()
+			AdvanceGameStockTick()
+		}()
+	}
+}
+
+// GetGameStockKlines 按时间升序返回最近 limit 根K线。
 func GetGameStockKlines(stockId int, limit int) ([]*GameStockKline, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 240
@@ -470,6 +511,10 @@ func OpenFutures(userId int, side string, leverage int, marginQuota int, stockId
 	if stock.HaltedUntil > time.Now().Unix() {
 		return nil, errors.New("该股票临时停牌中，暂停交易")
 	}
+	// 价格为 0 时仓位规模会变成 +Inf，后续盈亏全部失真
+	if stock.LastPrice <= 0 {
+		return nil, errors.New("该股票暂无有效报价，暂时无法开仓")
+	}
 	userQuota, err := GetUserQuota(userId, false)
 	if err != nil {
 		return nil, err
@@ -632,5 +677,4 @@ func GetGameStockQuoteMap() (map[int]*GameStock, error) {
 	return m, nil
 }
 
-var _ = fmt.Sprintf // keep fmt when unused in future edits
 var _ = gorm.ErrRecordNotFound

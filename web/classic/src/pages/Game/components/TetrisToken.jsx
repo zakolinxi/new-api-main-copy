@@ -305,7 +305,7 @@ const TetrisToken = ({ t }) => {
         {t('消行 × 等级：1行100×L / 2行300×L / 3行500×L / 4行800×L，每 10 行升一级加速。')}
       </Text>
       {over && <Text type='danger' strong className='block mt-1 text-center'>{t('游戏结束！')}{t('最终得分')} {score}</Text>}
-      <RedeemPanel gameKey='tetris' score={score} onRedeemed={() => setScore(0)} t={t} />
+      <RedeemPanel gameKey='tetris' score={score} onRedeemed={(amount) => setScore((s) => Math.max(0, s - amount))} t={t} />
     </div>
   );
 };

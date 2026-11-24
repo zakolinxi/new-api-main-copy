@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Button, Typography, Tag, Space } from '@douyinfe/semi-ui';
 import { RedeemPanel } from './GameModal';
 import { usePhaserGame } from './usePhaserGame';
+import { useRedeemableScore } from './useRedeemableScore';
 
 const { Text } = Typography;
 
@@ -28,13 +29,14 @@ const TILE_COLORS = {
 
 // Phaser 引擎版 1024：滑动补间、合并弹跳、出现缩放、键盘+触摸手势
 const Game1024 = ({ t }) => {
-  const [score, setScore] = useState(0);
+  const { score, sync: syncScore, settle: settleScore } = useRedeemableScore();
   const [over, setOver] = useState(false);
   const [best, setBest] = useState(() => Number(localStorage.getItem('g1024-best') || 0));
   const cmdRef = useRef({ cmd: null });
   const hooks = useRef({
     onScore: (s) => {
-      setScore(s);
+      // 引擎上报的是本局累计总分，兑换过的部分要扣掉，否则可以反复兑换同一批分数
+      syncScore(s);
       setBest((b) => {
         const nb = Math.max(b, s);
         localStorage.setItem('g1024-best', String(nb));
@@ -289,7 +291,7 @@ const Game1024 = ({ t }) => {
         {t('方向键/WASD 或触摸滑动。合并弹跳动画与手感由 Phaser 引擎补间驱动。')}
       </Text>
       {over && <Text type='danger' strong className='block mt-1 text-center'>{t('无法移动，游戏结束！')}</Text>}
-      <RedeemPanel gameKey='g1024' score={score} onRedeemed={() => setScore(0)} t={t} />
+      <RedeemPanel gameKey='g1024' score={score} onRedeemed={settleScore} t={t} />
     </div>
   );
 };

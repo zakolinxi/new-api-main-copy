@@ -4815,6 +4815,12 @@
     "这一行合并了 {{merged}} 次调用，下面列出最近 {{shown}} 条。": "This row merges {{merged}} calls. The latest {{shown}} are listed below.",
     "共 {{total}} 条，仅展示最近 {{shown}} 条。": "{{total}} in total, showing the latest {{shown}}.",
     "这一行合并了 {{count}} 次调用，点击可查看每一次。": "This row merges {{count}} calls. Click to see each one.",
-    "合并说明": "Merge note"
+    "合并说明": "Merge note",
+    "定时下线": "Scheduled disable",
+    "留空表示不设置": "Leave empty for no schedule",
+    "到点后该渠道会自动停用（状态变为已禁用）并清除本条计划，重新上线请手动启用。只填写日期时按当天 00:00 计算。": "At that time the channel is disabled automatically and the schedule is cleared; re-enable it manually to bring it back. A date-only value takes effect at 00:00.",
+    "定时下线时间格式错误": "Invalid scheduled disable time",
+    "定时下线时间必须晚于当前时间": "Scheduled disable time must be in the future",
+    "将于 {{time}} 自动下线": "Disabled automatically at {{time}}"
   }
 }

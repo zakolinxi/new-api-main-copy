@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Button, Typography, Tag, Space } from '@douyinfe/semi-ui';
 import { RedeemPanel } from './GameModal';
 import { usePhaserGame } from './usePhaserGame';
+import { useRedeemableScore } from './useRedeemableScore';
 
 const { Text } = Typography;
 
@@ -25,14 +26,15 @@ const ITEM_TYPES = [
 
 // Phaser 引擎版黄金矿工：角速度摆锤物理、绳索绘制、按重量的收线速度、关卡目标
 const GoldMiner = ({ t }) => {
-  const [score, setScore] = useState(0);
+  const { score, sync: syncScore, settle: settleScore } = useRedeemableScore();
   const [timeLeft, setTimeLeft] = useState(60);
   const [level, setLevel] = useState(1);
   const [target, setTarget] = useState(650);
   const [status, setStatus] = useState('idle'); // idle | running | over | win
   const cmdRef = useRef({ cmd: null });
   const hooks = useRef({
-    onScore: (s) => setScore(s),
+    // 引擎上报的是本局累计总分，扣除已兑换部分后再显示，避免重复兑换
+    onScore: (s) => syncScore(s),
     onTime: (s) => setTimeLeft(s),
     onLevel: (l, tg) => { setLevel(l); setTarget(tg); },
     onStatus: (s) => setStatus(s),
@@ -258,7 +260,7 @@ const GoldMiner = ({ t }) => {
           {status === 'win' ? t('🎉 达标！可进入下一关') : t('未达标，游戏结束')}
         </Text>
       )}
-      <RedeemPanel gameKey='goldminer' score={score} onRedeemed={() => setScore(0)} t={t} />
+      <RedeemPanel gameKey='goldminer' score={score} onRedeemed={settleScore} t={t} />
     </div>
   );
 };

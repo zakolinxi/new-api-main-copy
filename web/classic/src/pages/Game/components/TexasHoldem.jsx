@@ -436,7 +436,7 @@ const TexasHoldem = ({ t }) => {
     return (
       <div>
         <div className='rounded-xl p-8 text-center' style={{ background: '#07402e' }}>
-          <Text style={{ color: '#fbbf24' }} strong style={{ fontSize: 22 }}>
+          <Text strong style={{ color: '#fbbf24', fontSize: 22 }}>
             🃏 {t('德州扑克 · 单挑桌')}
           </Text>
           <Text style={{ color: '#d1fae5' }} className='block mt-2'>
@@ -446,7 +446,7 @@ const TexasHoldem = ({ t }) => {
             {t('坐上牌桌')}
           </Button>
         </div>
-        <RedeemPanel gameKey='texas' score={cumScore} onRedeemed={() => setCumScore(0)} t={t} />
+        <RedeemPanel gameKey='texas' score={cumScore} onRedeemed={(amount) => setCumScore((s) => Math.max(0, s - amount))} t={t} />
       </div>
     );
   }
@@ -588,7 +588,7 @@ const TexasHoldem = ({ t }) => {
       <Text type='secondary' size='small' className='block mt-2'>
         {t('每赢一池按底池一半记分。盲注每 6 手翻倍，输光筹码即结束。')}
       </Text>
-      <RedeemPanel gameKey='texas' score={cumScore} onRedeemed={() => setCumScore(0)} t={t} />
+      <RedeemPanel gameKey='texas' score={cumScore} onRedeemed={(amount) => setCumScore((s) => Math.max(0, s - amount))} t={t} />
     </div>
   );
 };

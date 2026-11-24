@@ -406,7 +406,7 @@ const Roulette = ({ t }) => {
       <RedeemPanel
         gameKey='roulette'
         score={score}
-        onRedeemed={() => setScore(0)}
+        onRedeemed={(amount) => setScore((s) => Math.max(0, s - amount))}
         t={t}
       />
     </div>

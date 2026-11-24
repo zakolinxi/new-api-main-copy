@@ -80,8 +80,9 @@ const KlineChart = ({ klines }) => {
       const low = k.low ?? k.Low;
       const x = padding.left + i * cw + cw / 2;
       const up = close >= open;
-      ctx.strokeStyle = up ? '#22c55e' : '#ef4444';
-      ctx.fillStyle = up ? '#22c55e' : '#ef4444';
+      // 与国内行情一致：涨红跌绿（本文件的价格列表也是这个配色）
+      ctx.strokeStyle = up ? '#ef4444' : '#22c55e';
+      ctx.fillStyle = up ? '#ef4444' : '#22c55e';
       // 影线
       ctx.beginPath();
       ctx.moveTo(x, y(high));

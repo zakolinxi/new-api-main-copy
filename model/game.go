@@ -34,7 +34,7 @@ type GameConfig struct {
 	Description string `json:"description" gorm:"type:varchar(512)"`
 	Status      string `json:"status" gorm:"type:varchar(32);index"`
 	SortOrder   int    `json:"sort_order"`
-	// MaxScore 单局得分上限，超过视为异常拒收
+	// MaxScore 单次兑换允许的最大分数；等于 0 表示该游戏不使用积分兑换（如股市、合约）
 	MaxScore    int    `json:"max_score"`
 	PageTitle   string `json:"page_title" gorm:"-:all"`
 	UpdatedTime int64  `json:"updated_time" gorm:"bigint"`
@@ -77,6 +77,19 @@ func InitGameConfigs() error {
 	for _, game := range defaultGames {
 		game.UpdatedTime = common.GetTimestamp()
 		if err := DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&game).Error; err != nil {
+			return err
+		}
+	}
+	// 老版本种子的 MaxScore 可能比当前默认值小（挖矿曾经是 10 万分），而前端分数到顶后
+	// 会按上限整笔兑换，上限低于累计分数时兑换会被判定超限，分数就永久卡在顶端无法提现。
+	// 这里只把上限抬到默认值，不会覆盖管理员手动调高的配置。
+	for _, game := range defaultGames {
+		if game.MaxScore <= 0 {
+			continue
+		}
+		if err := DB.Model(&GameConfig{}).
+			Where("game_key = ? AND max_score < ?", game.GameKey, game.MaxScore).
+			Update("max_score", game.MaxScore).Error; err != nil {
 			return err
 		}
 	}
@@ -158,8 +171,13 @@ func RedeemGameScore(userId int, username string, gameKey string, score int) (in
 	if game.Status != GameStatusAvailable {
 		return 0, 0, errors.New("game is not available")
 	}
-	if game.MaxScore > 0 && score > game.MaxScore {
-		return 0, 0, fmt.Errorf("score exceeds limit (%d)", game.MaxScore)
+	// MaxScore <= 0 表示该游戏不使用积分兑换（股市、合约直接交易真实额度）。
+	// 不能把 0 当成「无上限」放行，否则可以伪造任意分数无限兑换额度。
+	if game.MaxScore <= 0 {
+		return 0, 0, errors.New("该游戏不支持积分兑换")
+	}
+	if score > game.MaxScore {
+		return 0, 0, fmt.Errorf("分数超过该游戏上限（单次最多 %d 分），请稍后再兑换", game.MaxScore)
 	}
 
 	now := common.GetTimestamp()

@@ -275,11 +275,18 @@ func updateStockPriceByEvent(stock *GameStock, newPrice float64) {
 }
 
 // TriggerCorporateActions 稀有公司行为：分红 / 拆股 / 退市并购。
-// 由每日开盘前调用（或每 tick 以极低概率）。
+// 只在每个交易日的第一根K线时调用一次，下面的概率是「每日」量级，不要按分钟调用。
 func TriggerCorporateActions(now time.Time) {
 	stocks, err := ListGameStocks()
 	if err != nil {
 		return
+	}
+	// 退市是永久的（没有重新上市逻辑），必须保留几只仍在交易的股票，否则股市会慢慢空掉
+	listed := 0
+	for _, stock := range stocks {
+		if !stock.Delisted {
+			listed += 1
+		}
 	}
 	for _, stock := range stocks {
 		if stock.Delisted {
@@ -307,15 +314,23 @@ func TriggerCorporateActions(now time.Time) {
 				fmt.Sprintf("%s 实施 %d:1 拆股", stock.Name, ratio),
 				fmt.Sprintf("股价与持仓股数已按 %d:1 自动调整。", ratio), 0, "")
 		case roll < 0.016: // 要约收购 → 退市，持仓按溢价现金结算
+			if listed <= 2 {
+				continue
+			}
 			premium := 1.15 + rand.Float64()*0.35
 			acquirePrice := stock.LastPrice * premium
 			acquireAndDelist(stock, acquirePrice)
+			listed -= 1
 			recordStockEvent(stock.Id, stock.Code, "delisting", "acquisition",
 				fmt.Sprintf("%s 被要约收购并退市", stock.Name),
 				fmt.Sprintf("收购价 $%.2f（溢价 %.0f%%），持仓已自动现金结算。", acquirePrice, (premium-1)*100), 0, "")
 		case roll < 0.017: // 破产退市（极稀有）
+			if listed <= 2 {
+				continue
+			}
 			if rand.Float64() < 0.3 {
 				acquireAndDelist(stock, 0.01) // 股东最后受偿，几乎归零
+				listed -= 1
 				recordStockEvent(stock.Id, stock.Code, "delisting", "bankruptcy",
 					fmt.Sprintf("%s 宣布破产清算", stock.Name),
 					"资不抵债进入清算程序，股票摘牌，股东受偿归零。", -100, "")
@@ -368,11 +383,21 @@ func applyStockSplit(stock *GameStock, ratio int) {
 				}).Error
 		}
 	}
-	// K线按比例缩放，保持历史连续
-	_ = DB.Model(&GameStockKline{}).Where("stock_id = ?", stock.Id).
-		Updates(map[string]any{
-			"open": newPrice, "high": newPrice, "low": newPrice, "close": newPrice,
-		}).Error
+	// K线按比例缩放，保持历史连续：必须逐根除以拆股比例，
+	// 原来是把所有历史K线统一写成同一个价格，等于把历史行情全部抹平。
+	var klines []GameStockKline
+	if err := DB.Where("stock_id = ?", stock.Id).Find(&klines).Error; err == nil {
+		scale := float64(ratio)
+		for _, kline := range klines {
+			_ = DB.Model(&GameStockKline{}).Where("id = ?", kline.Id).
+				Updates(map[string]any{
+					"open":  kline.Open / scale,
+					"high":  kline.High / scale,
+					"low":   kline.Low / scale,
+					"close": kline.Close / scale,
+				}).Error
+		}
+	}
 }
 
 // acquireAndDelist 退市：持仓按收购价强制现金结算，股票标记退市。

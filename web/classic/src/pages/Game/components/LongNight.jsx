@@ -135,7 +135,7 @@ const LongNight = ({ t }) => {
       <Text type='secondary' className='block mt-2'>
         {t('熬 120 秒到天亮。火会越烧越快，火弱时怪物伤你。每秒存活 20 分，天亮 +3000。每局最多添柴 12 次。')}
       </Text>
-      <RedeemPanel gameKey='longnight' score={score} onRedeemed={() => setScore(0)} t={t} />
+      <RedeemPanel gameKey='longnight' score={score} onRedeemed={(amount) => setScore((s) => Math.max(0, s - amount))} t={t} />
     </div>
   );
 };
