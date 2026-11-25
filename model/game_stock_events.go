@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 	"time"
@@ -255,7 +256,10 @@ func triggerStockEvent(stock *GameStock) {
 	}
 }
 
-// updateStockPriceByEvent 事件后同步股票价格字段（不动K线，K线由 tick 写）。
+// updateStockPriceByEvent 事件后同步股票价格字段，并把当前这根K线的收盘价一起带过去。
+//
+// 事件是在 tick 写完当根K线之后触发的；如果只改 last_price 不改K线，图表上会出现
+// 「收盘价与最新价相差几个百分点」的脱节，同一分钟内后续 tick 又不会重写这根K线。
 func updateStockPriceByEvent(stock *GameStock, newPrice float64) {
 	if newPrice <= 0 {
 		newPrice = stock.LastPrice
@@ -271,6 +275,16 @@ func updateStockPriceByEvent(stock *GameStock, newPrice float64) {
 	_ = DB.Model(stock).Updates(map[string]any{
 		"last_price": stock.LastPrice, "high_price": stock.HighPrice,
 		"low_price": stock.LowPrice, "updated_time": stock.UpdatedTime,
+	}).Error
+
+	var latestKline GameStockKline
+	if err := DB.Where("stock_id = ?", stock.Id).Order("ts desc").First(&latestKline).Error; err != nil {
+		return
+	}
+	high := math.Max(math.Max(latestKline.High, newPrice), latestKline.Open)
+	low := math.Min(math.Min(latestKline.Low, newPrice), latestKline.Open)
+	_ = DB.Model(&GameStockKline{}).Where("id = ?", latestKline.Id).Updates(map[string]any{
+		"close": newPrice, "high": high, "low": low,
 	}).Error
 }
 

@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 
@@ -233,13 +234,14 @@ func advanceGameStockTickAt(now time.Time) {
 		if closePrice < low {
 			low = closePrice
 		}
-		// 分钟内高低点模拟
-		wick := (rand.Float64() - 0.5) * 0.006 * stock.LastPrice
-		high = clampPrice(high+wick, stock.PrevClose)
-		low = clampPrice(low-wick, stock.PrevClose)
-		if high < low {
-			high, low = low, high
-		}
+		// 分钟内高低点模拟：影线只能向两侧「延长」，不能再把最高价压回开盘价之下。
+		highWick := rand.Float64() * 0.003 * stock.LastPrice
+		lowWick := rand.Float64() * 0.003 * stock.LastPrice
+		high = clampPrice(high+highWick, stock.PrevClose)
+		low = clampPrice(low-lowWick, stock.PrevClose)
+		// 兜底保证 OHLC 合法：最高价不低于开收盘，最低价不高于开收盘。
+		high = math.Max(high, math.Max(openPrice, closePrice))
+		low = math.Min(low, math.Min(openPrice, closePrice))
 		volume := int64(1000 + rand.Intn(9000))
 
 		kline := &GameStockKline{
