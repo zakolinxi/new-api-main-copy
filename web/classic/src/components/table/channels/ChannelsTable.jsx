@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useMemo } from 'react';
+import React, { useContext, useMemo } from 'react';
 import { Empty } from '@douyinfe/semi-ui';
 import CardTable from '../../common/ui/CardTable';
 import {
@@ -25,8 +25,17 @@ import {
   IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
 import { getChannelsColumns } from './ChannelsColumnDefs';
+import {
+  resolveChannelScheduleOffsetMinutes,
+} from '../../../helpers/schedule-time';
+import { StatusContext } from '../../../context/Status';
 
 const ChannelsTable = (channelsData) => {
+  const [statusState] = useContext(StatusContext);
+  // 定时下线按服务端配置的时区显示，避免浏览器时区不同导致提示时间偏移。
+  const scheduleOffsetMinutes = resolveChannelScheduleOffsetMinutes(
+    statusState?.status,
+  );
   const {
     channels,
     loading,
@@ -69,6 +78,7 @@ const ChannelsTable = (channelsData) => {
   const allColumns = useMemo(() => {
     return getChannelsColumns({
       t,
+      scheduleOffsetMinutes,
       COLUMN_KEYS,
       updateChannelBalance,
       manageChannel,

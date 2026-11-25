@@ -64,6 +64,9 @@ const numericString = z.string().refine((value) => {
 const channelTestModes = ['scheduled_all', 'passive_recovery'] as const
 type ChannelTestMode = (typeof channelTestModes)[number]
 
+const channelScheduleTimezones = ['utc+8', 'utc', 'server'] as const
+type ChannelScheduleTimezone = (typeof channelScheduleTimezones)[number]
+
 const routingReliabilitySchema = z
   .object({
     RetryTimes: z.coerce.number().min(0).max(10),
@@ -73,6 +76,7 @@ const routingReliabilitySchema = z
     AutomaticDisableKeywords: z.string(),
     AutomaticDisableStatusCodes: z.string(),
     AutomaticRetryStatusCodes: z.string(),
+    ChannelScheduleTimezone: z.enum(channelScheduleTimezones),
     monitor_setting: z.object({
       auto_test_channel_enabled: z.boolean(),
       auto_test_channel_minutes: z.coerce
@@ -122,6 +126,7 @@ type RoutingReliabilitySectionProps = {
     AutomaticDisableKeywords: string
     AutomaticDisableStatusCodes: string
     AutomaticRetryStatusCodes: string
+    ChannelScheduleTimezone?: ChannelScheduleTimezone
     'monitor_setting.auto_test_channel_enabled': boolean
     'monitor_setting.auto_test_channel_minutes': number
     'monitor_setting.channel_test_mode': ChannelTestMode
@@ -140,6 +145,7 @@ type NormalizedRoutingReliabilityValues = {
   AutomaticDisableKeywords: string
   AutomaticDisableStatusCodes: string
   AutomaticRetryStatusCodes: string
+  ChannelScheduleTimezone: ChannelScheduleTimezone
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.auto_test_channel_minutes': number
   'monitor_setting.channel_test_mode': ChannelTestMode
@@ -147,6 +153,10 @@ type NormalizedRoutingReliabilityValues = {
 
 function normalizeChannelTestMode(value?: string): ChannelTestMode {
   return value === 'passive_recovery' ? 'passive_recovery' : 'scheduled_all'
+}
+
+function normalizeChannelScheduleTimezone(value?: string): ChannelScheduleTimezone {
+  return value === 'utc' || value === 'server' ? value : 'utc+8'
 }
 
 const buildFormDefaults = (
@@ -161,6 +171,9 @@ const buildFormDefaults = (
   ),
   AutomaticDisableStatusCodes: defaults.AutomaticDisableStatusCodes ?? '',
   AutomaticRetryStatusCodes: defaults.AutomaticRetryStatusCodes ?? '',
+  ChannelScheduleTimezone: normalizeChannelScheduleTimezone(
+    defaults.ChannelScheduleTimezone
+  ),
   monitor_setting: {
     auto_test_channel_enabled:
       defaults['monitor_setting.auto_test_channel_enabled'],
@@ -188,6 +201,9 @@ const normalizeDefaults = (
   AutomaticRetryStatusCodes: parseHttpStatusCodeRules(
     defaults.AutomaticRetryStatusCodes ?? ''
   ).normalized,
+  ChannelScheduleTimezone: normalizeChannelScheduleTimezone(
+    defaults.ChannelScheduleTimezone
+  ),
   'monitor_setting.auto_test_channel_enabled':
     defaults['monitor_setting.auto_test_channel_enabled'],
   'monitor_setting.auto_test_channel_minutes':
@@ -213,6 +229,7 @@ const normalizeFormValues = (
   AutomaticRetryStatusCodes: parseHttpStatusCodeRules(
     values.AutomaticRetryStatusCodes
   ).normalized,
+  ChannelScheduleTimezone: values.ChannelScheduleTimezone,
   'monitor_setting.auto_test_channel_enabled':
     values.monitor_setting.auto_test_channel_enabled,
   'monitor_setting.auto_test_channel_minutes':
@@ -374,6 +391,54 @@ export function RoutingReliabilitySection({
                       />
                     </FormControl>
                   </SettingsSwitchItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='ChannelScheduleTimezone'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Channel schedule timezone')}</FormLabel>
+                    <Select
+                      items={[
+                        {
+                          value: 'utc+8',
+                          label: t('UTC+8 (Beijing time)'),
+                        },
+                        { value: 'utc', label: 'UTC' },
+                        {
+                          value: 'server',
+                          label: t('Follow the server timezone'),
+                        },
+                      ]}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent alignItemWithTrigger={false}>
+                        <SelectGroup>
+                          <SelectItem value='utc+8'>
+                            {t('UTC+8 (Beijing time)')}
+                          </SelectItem>
+                          <SelectItem value='utc'>UTC</SelectItem>
+                          <SelectItem value='server'>
+                            {t('Follow the server timezone')}
+                          </SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      {t(
+                        'Scheduled channel disable converts the time you enter into a timestamp using this timezone, independent of the server timezone.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
 

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useContext, useEffect, useState, useRef, useMemo } from 'react';
 import {
   Banner,
   Button,
@@ -37,11 +37,13 @@ import {
   showWarning,
 } from '../../../helpers';
 import { useTranslation } from 'react-i18next';
+import { StatusContext } from '../../../context/Status';
 
 const { Text } = Typography;
 
 export default function GeneralSettings(props) {
   const { t } = useTranslation();
+  const [, statusDispatch] = useContext(StatusContext);
   const [loading, setLoading] = useState(false);
   const [showQuotaWarning, setShowQuotaWarning] = useState(false);
   const [inputs, setInputs] = useState({
@@ -58,6 +60,7 @@ export default function GeneralSettings(props) {
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
     'token_setting.max_user_tokens': 1000,
+    ChannelScheduleTimezone: 'utc+8',
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -93,6 +96,16 @@ export default function GeneralSettings(props) {
             return showError(t('部分保存失败，请重试'));
         }
         showSuccess(t('保存成功'));
+        // 时区口径由 /api/status 下发，改完要立刻刷新，否则渠道弹窗仍按旧时区换算。
+        if (updateArray.some((item) => item.key === 'ChannelScheduleTimezone')) {
+          API.get('/api/status')
+            .then((statusRes) => {
+              if (statusRes.data?.success) {
+                statusDispatch({ type: 'set', payload: statusRes.data.data });
+              }
+            })
+            .catch(() => {});
+        }
         props.refresh();
       })
       .catch(() => {
@@ -272,6 +285,24 @@ export default function GeneralSettings(props) {
                   onChange={handleFieldChange('RetryTimes')}
                   showClear
                 />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Select
+                  field='ChannelScheduleTimezone'
+                  label={t('渠道定时下线时区')}
+                  extraText={t(
+                    '定时下线按此时区把界面上填写的日期时间换算成时间戳，与服务器所在时区无关。修改时区不会改变已保存的计划。',
+                  )}
+                  onChange={handleFieldChange('ChannelScheduleTimezone')}
+                >
+                  <Form.Select.Option value='utc+8'>
+                    {t('UTC+8（北京时间）')}
+                  </Form.Select.Option>
+                  <Form.Select.Option value='utc'>UTC</Form.Select.Option>
+                  <Form.Select.Option value='server'>
+                    {t('跟随服务器本地时区')}
+                  </Form.Select.Option>
+                </Form.Select>
               </Col>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
                 <Form.Select

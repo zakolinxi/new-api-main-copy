@@ -55,6 +55,11 @@ import {
   formatTimestampToDate,
   formatQuota as formatQuotaValue,
 } from '@/lib/format'
+import { useStatus } from '@/hooks/use-status'
+import {
+  formatScheduledDisableAt,
+  resolveChannelScheduleOffsetMinutes,
+} from '../lib/channel-form'
 import { truncateText } from '@/lib/utils'
 
 import { getCodexUsage } from '../api'
@@ -541,6 +546,10 @@ function BalanceCell({ channel }: { channel: Channel }) {
 export function useChannelsColumns(): ColumnDef<Channel>[] {
   const { t, i18n } = useTranslation()
   const { sensitiveVisible } = useChannels()
+  // 定时下线时间按服务端配置的时区展示，避免浏览器时区不同导致提示偏移。
+  const { status: systemStatus } = useStatus()
+  const scheduleOffsetMinutes =
+    resolveChannelScheduleOffsetMinutes(systemStatus)
   const locale = i18n.resolvedLanguage || i18n.language
   // The column definitions only depend on the translation function, the active
   // locale, and sensitive-data visibility. Memoizing keeps the array (and every
@@ -962,7 +971,10 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
                   <TooltipContent side='top' className='max-w-xs'>
                     <div className='text-xs'>
                       {t('Scheduled disable at')}{' '}
-                      {formatTimestampToDate(scheduledDisableAt)}
+                      {formatScheduledDisableAt(
+                        scheduledDisableAt,
+                        scheduleOffsetMinutes
+                      )}
                     </div>
                   </TooltipContent>
                 </Tooltip>
@@ -1204,6 +1216,6 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
         meta: { pinned: 'right' as const },
       },
     ],
-    [t, locale, sensitiveVisible]
+    [t, locale, sensitiveVisible, scheduleOffsetMinutes]
   )
 }

@@ -57,6 +57,7 @@ import {
   sideDrawerSwitchItemClassName,
 } from '@/components/drawer-layout'
 import { JsonEditor } from '@/components/json-editor'
+import { useStatus } from '@/hooks/use-status'
 import { MultiSelect } from '@/components/multi-select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -134,6 +135,7 @@ import {
   channelsQueryKeys,
   getAdvancedCustomStats,
   transformChannelToFormDefaults,
+  resolveChannelScheduleOffsetMinutes,
   type ChannelFormValues,
   deduplicateKeys,
   getChannelTypeIcon,
@@ -299,6 +301,10 @@ export function ChannelMutateDrawer({
 }: ChannelMutateDrawerProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  // 定时下线按服务端配置的时区回填与提交，避免浏览器时区与站点口径不一致。
+  const { status: systemStatus } = useStatus()
+  const scheduleOffsetMinutes =
+    resolveChannelScheduleOffsetMinutes(systemStatus)
   const { setOpen } = useChannels()
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false)
   const [channelKey, setChannelKey] = useState<string | null>(null)
@@ -619,7 +625,10 @@ export function ChannelMutateDrawer({
   // Load channel data into form when editing
   useEffect(() => {
     if (isEditing && channelData?.data) {
-      const defaults = transformChannelToFormDefaults(channelData.data)
+      const defaults = transformChannelToFormDefaults(
+        channelData.data,
+        scheduleOffsetMinutes
+      )
       form.reset(defaults)
       setAdvancedSettingsOpen(
         readAdvancedSettingsPreference() || hasAdvancedSettingsValues(defaults)

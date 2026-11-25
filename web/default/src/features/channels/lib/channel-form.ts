@@ -352,6 +352,72 @@ export type ChannelFormValues = z.infer<typeof channelFormSchema>
 // Default Form Values
 // ============================================================================
 
+// 定时下线的时间口径。
+//
+// 界面上填写的是墙上时间（例如 2026-12-01 00:00），数据库存的是 Unix 秒。
+// 换算必须绑定一个时区：这里使用后端 /api/status 下发的口径（默认 UTC+8），
+// 而不是浏览器本地时区，否则同一日期在不同地区的管理员手里会命中不同时刻。
+export const DEFAULT_CHANNEL_SCHEDULE_OFFSET_MINUTES = 480
+
+/**
+ * 从 /api/status 读取定时下线的时区偏移（分钟）。缺失或非法时回退到 UTC+8，
+ * 保证老后端或缓存数据下的换算口径与默认配置一致。
+ */
+export function resolveChannelScheduleOffsetMinutes(
+  status?: Record<string, unknown> | null
+): number {
+  const offset = Number(status?.channel_schedule_utc_offset_minutes)
+  if (!Number.isFinite(offset) || Math.abs(offset) > 14 * 60) {
+    return DEFAULT_CHANNEL_SCHEDULE_OFFSET_MINUTES
+  }
+  return offset
+}
+
+const padSchedulePart = (value: number) => String(value).padStart(2, '0')
+
+/**
+ * Unix 秒 -> 指定时区口径下的 "YYYY-MM-DD HH:mm"，用于表单回填与列表提示。
+ */
+export function formatScheduledDisableAt(
+  timestampSeconds: number,
+  offsetMinutes: number = DEFAULT_CHANNEL_SCHEDULE_OFFSET_MINUTES
+): string {
+  if (!timestampSeconds || timestampSeconds <= 0) return ''
+  const shifted = new Date((timestampSeconds + offsetMinutes * 60) * 1000)
+  return (
+    `${shifted.getUTCFullYear()}-${padSchedulePart(shifted.getUTCMonth() + 1)}-${padSchedulePart(shifted.getUTCDate())}` +
+    ` ${padSchedulePart(shifted.getUTCHours())}:${padSchedulePart(shifted.getUTCMinutes())}`
+  )
+}
+
+/**
+ * 定时下线时间：接受 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:mm"，只填日期时按当天 00:00 计算。
+ * 时间按 offsetMinutes 指定的时区口径解释。
+ * 返回 unix 秒；空值或非法值返回 0（表示不设置）。
+ */
+export function parseScheduledDisableAt(
+  value?: string,
+  offsetMinutes: number = DEFAULT_CHANNEL_SCHEDULE_OFFSET_MINUTES
+): number {
+  const trimmed = String(value || '').trim()
+  if (!trimmed) return 0
+  const matched =
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/.exec(
+      trimmed
+    )
+  if (!matched) return 0
+  const utcMilliseconds = Date.UTC(
+    Number(matched[1]),
+    Number(matched[2]) - 1,
+    Number(matched[3]),
+    Number(matched[4] ?? 0),
+    Number(matched[5] ?? 0),
+    Number(matched[6] ?? 0)
+  )
+  if (Number.isNaN(utcMilliseconds)) return 0
+  return Math.floor(utcMilliseconds / 1000) - offsetMinutes * 60
+}
+
 export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   name: '',
   type: 1,
@@ -414,7 +480,8 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
  * Transform Channel from API to Form default values
  */
 export function transformChannelToFormDefaults(
-  channel: Channel
+  channel: Channel,
+  scheduleOffsetMinutes: number = DEFAULT_CHANNEL_SCHEDULE_OFFSET_MINUTES
 ): ChannelFormValues {
   // Parse channel extra settings from setting field
   let extraSettings = {
@@ -514,7 +581,10 @@ export function transformChannelToFormDefaults(
     tag: channel.tag || '',
     remark: channel.remark || '',
     scheduled_disable_at: channel.scheduled_disable_at
-      ? dayjs(channel.scheduled_disable_at * 1000).format('YYYY-MM-DD HH:mm')
+      ? formatScheduledDisableAt(
+          channel.scheduled_disable_at,
+          scheduleOffsetMinutes
+        )
       : '',
     setting: channel.setting || '',
     param_override: channel.param_override || '',
@@ -736,18 +806,6 @@ export function buildModelConcurrencyMap(
   return result
 }
 
-/**
- * 定时下线时间：接受 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:mm"，只填日期时按当天 00:00 计算。
- * 返回 unix 秒；空值或非法值返回 0（表示不设置）。
- */
-export function parseScheduledDisableAt(value?: string): number {
-  const trimmed = String(value || '').trim()
-  if (!trimmed) return 0
-  const parsed = dayjs(trimmed)
-  if (!parsed.isValid()) return 0
-  return Math.floor(parsed.valueOf() / 1000)
-}
-
 function normalizeBaseUrl(value: string | undefined): string {
   return String(value || '')
     .trim()
@@ -757,7 +815,10 @@ function normalizeBaseUrl(value: string | undefined): string {
 /**
  * Transform form data to API payload for creating channel
  */
-export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
+export function transformFormDataToCreatePayload(
+  formData: ChannelFormValues,
+  scheduleOffsetMinutes: number = DEFAULT_CHANNEL_SCHEDULE_OFFSET_MINUTES
+): {
   mode: 'single' | 'batch' | 'multi_to_single'
   multi_key_mode?: 'random' | 'polling'
   batch_add_set_key_prefix_2_name?: boolean
@@ -782,7 +843,10 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
-    scheduled_disable_at: parseScheduledDisableAt(formData.scheduled_disable_at),
+    scheduled_disable_at: parseScheduledDisableAt(
+      formData.scheduled_disable_at,
+      scheduleOffsetMinutes
+    ),
     setting: buildSettingJSON(formData),
     param_override: formData.param_override || null,
     header_override: formData.header_override || null,
@@ -812,7 +876,8 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
  */
 export function transformFormDataToUpdatePayload(
   formData: ChannelFormValues,
-  channelId: number
+  channelId: number,
+  scheduleOffsetMinutes: number = DEFAULT_CHANNEL_SCHEDULE_OFFSET_MINUTES
 ): Partial<Channel> {
   const payload: Partial<Channel> = {
     id: channelId,
@@ -831,7 +896,10 @@ export function transformFormDataToUpdatePayload(
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
-    scheduled_disable_at: parseScheduledDisableAt(formData.scheduled_disable_at),
+    scheduled_disable_at: parseScheduledDisableAt(
+      formData.scheduled_disable_at,
+      scheduleOffsetMinutes
+    ),
     setting: buildSettingJSON(formData),
     param_override: formData.param_override || null,
     header_override: formData.header_override || null,

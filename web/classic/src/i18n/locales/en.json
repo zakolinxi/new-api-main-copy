@@ -4818,7 +4818,11 @@
     "合并说明": "Merge note",
     "定时下线": "Scheduled disable",
     "留空表示不设置": "Leave empty for no schedule",
-    "到点后该渠道会自动停用（状态变为已禁用）并清除本条计划，重新上线请手动启用。只填写日期时按当天 00:00 计算。": "At that time the channel is disabled automatically and the schedule is cleared; re-enable it manually to bring it back. A date-only value takes effect at 00:00.",
+    "到点后该渠道会自动停用（状态变为已禁用）并清除本条计划，重新上线请手动启用。只填写日期时按当天 00:00 计算，时区口径为 {{timezone}}。": "At that time the channel is disabled automatically and the schedule is cleared; re-enable it manually to bring it back. A date-only value takes effect at 00:00 in the {{timezone}} timezone.",
+    "渠道定时下线时区": "Channel schedule timezone",
+    "定时下线按此时区把界面上填写的日期时间换算成时间戳，与服务器所在时区无关。修改时区不会改变已保存的计划。": "Scheduled disable converts the date and time you enter into a timestamp using this timezone, independent of the server timezone. Changing it does not affect schedules that are already saved.",
+    "UTC+8（北京时间）": "UTC+8 (Beijing time)",
+    "跟随服务器本地时区": "Follow the server timezone",
     "定时下线时间格式错误": "Invalid scheduled disable time",
     "定时下线时间必须晚于当前时间": "Scheduled disable time must be in the future",
     "将于 {{time}} 自动下线": "Disabled automatically at {{time}}"

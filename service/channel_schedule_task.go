@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/bytedance/gopkg/util/gopool"
 )
@@ -50,8 +51,10 @@ func runChannelScheduledDisableOnce(ctx context.Context) {
 			return
 		}
 		for i := range disabled {
-			logger.LogInfo(ctx, fmt.Sprintf("channel %d (%s) disabled by schedule at %d",
-				disabled[i].Id, disabled[i].Name, disabled[i].ScheduledDisableAt))
+			logger.LogInfo(ctx, fmt.Sprintf("channel %d (%s) disabled by schedule at %s (%s)",
+				disabled[i].Id, disabled[i].Name,
+				operation_setting.FormatChannelSchedule(disabled[i].ScheduledDisableAt),
+				operation_setting.ChannelScheduleTimezone))
 		}
 		total += len(disabled)
 		if len(disabled) < channelScheduledDisableBatchSize {

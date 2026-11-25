@@ -44,6 +44,7 @@ import {
   MODEL_FETCHABLE_CHANNEL_TYPES,
 } from '../../../constants';
 import { parseUpstreamUpdateMeta } from '../../../hooks/channels/upstreamUpdateUtils';
+import { timestampToWallClock } from '../../../helpers/schedule-time';
 import {
   IconTreeTriangleDown,
   IconMore,
@@ -310,6 +311,7 @@ const getUpstreamUpdateMeta = (record) => {
 
 export const getChannelsColumns = ({
   t,
+  scheduleOffsetMinutes,
   COLUMN_KEYS,
   updateChannelBalance,
   manageChannel,
@@ -503,7 +505,7 @@ export const getChannelsColumns = ({
           text === 1 && scheduledDisableAt > 0 ? (
             <Tooltip
               content={t('将于 {{time}} 自动下线', {
-                time: timestamp2string(scheduledDisableAt),
+                time: timestampToWallClock(scheduledDisableAt, scheduleOffsetMinutes),
               })}
             >
               <Tag color='orange' type='ghost' shape='circle'>

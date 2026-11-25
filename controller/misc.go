@@ -101,6 +101,10 @@ func GetStatus(c *gin.Context) {
 		"password_login_enabled":        common.PasswordLoginEnabled,
 		"password_register_enabled":     common.PasswordRegisterEnabled,
 		"default_use_auto_group":        setting.DefaultUseAutoGroup,
+		// 渠道定时下线的时间口径：前端用它把界面上填的墙上时间换算成时间戳，
+		// 保证与后端按同一时区判断，不会因为管理员浏览器时区不同而漂移。
+		"channel_schedule_timezone":           operation_setting.ChannelScheduleTimezone,
+		"channel_schedule_utc_offset_minutes": operation_setting.ChannelScheduleUTCOffsetMinutes(),
 
 		"password_login_encryption_enabled": common.PasswordLoginEncryptionEnabled,
 

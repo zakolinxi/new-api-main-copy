@@ -27,6 +27,8 @@ import {
   type ChannelFormValues,
 } from '../lib'
 import type { Channel } from '../types'
+import { useStatus } from '@/hooks/use-status'
+import { resolveChannelScheduleOffsetMinutes } from '../lib/channel-form'
 
 type UseChannelMutateFormParams = {
   currentRow?: Channel | null
@@ -62,13 +64,18 @@ function getErrorMessage(error: unknown): string | undefined {
 
 export function useChannelMutateForm(props: UseChannelMutateFormParams) {
   const { t } = useTranslation()
+  // 定时下线按服务端配置的时区换算，避免浏览器时区与站点口径不一致导致时间漂移。
+  const { status: systemStatus } = useStatus()
+  const scheduleOffsetMinutes =
+    resolveChannelScheduleOffsetMinutes(systemStatus)
 
   return useMutation({
     mutationFn: async (data: ChannelFormValues): Promise<string> => {
       if (props.isEditing && props.currentRow) {
         const payload = transformFormDataToUpdatePayload(
           data,
-          props.currentRow.id
+          props.currentRow.id,
+          scheduleOffsetMinutes
         )
         const payloadWithKeyMode =
           props.isMultiKeyChannel && data.key_mode
@@ -109,7 +116,10 @@ export function useChannelMutateForm(props: UseChannelMutateFormParams) {
         return SUCCESS_MESSAGES.UPDATED
       }
 
-      const payload = transformFormDataToCreatePayload(data)
+      const payload = transformFormDataToCreatePayload(
+        data,
+        scheduleOffsetMinutes
+      )
       const response = await createChannel(payload)
       if (!response.success) {
         throw new Error(response.message || t(ERROR_MESSAGES.CREATE_FAILED))

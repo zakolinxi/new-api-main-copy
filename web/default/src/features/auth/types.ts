@@ -177,6 +177,9 @@ export interface SystemStatus {
   usd_exchange_rate?: number
   custom_currency_symbol?: string
   custom_currency_exchange_rate?: number
+  // 渠道定时下线的时间口径，供管理端换算墙上时间
+  channel_schedule_utc_offset_minutes?: number
+  channel_schedule_timezone?: string
   demo_site_enabled?: boolean
   user_agreement_enabled?: boolean
   privacy_policy_enabled?: boolean

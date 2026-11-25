@@ -209,6 +209,7 @@ func InitOptionMap() {
 	common.OptionMap["AutomaticDisableKeywords"] = operation_setting.AutomaticDisableKeywordsToString()
 	common.OptionMap["AutomaticDisableStatusCodes"] = operation_setting.AutomaticDisableStatusCodesToString()
 	common.OptionMap["AutomaticRetryStatusCodes"] = operation_setting.AutomaticRetryStatusCodesToString()
+	common.OptionMap[operation_setting.ChannelScheduleTimezoneOptionKey] = operation_setting.ChannelScheduleTimezone
 	common.OptionMap["ExposeRatioEnabled"] = strconv.FormatBool(ratio_setting.IsExposeRatioEnabled())
 	common.OptionMap["LoginProxyURL"] = ""
 	_, _ = setting.SetLoginProxyURL("")
@@ -303,6 +304,10 @@ func validateOptionValue(key string, value string) error {
 }
 
 func normalizeOptionValue(key string, value string) (string, error) {
+	if key == operation_setting.ChannelScheduleTimezoneOptionKey {
+		// 时区口径决定定时下线换算，非法值直接拒绝，避免落库后与前端约定不一致。
+		return operation_setting.NormalizeChannelScheduleTimezone(value)
+	}
 	if key == setting.TokenKeyPrefixOptionKey {
 		return setting.NormalizeTokenKeyPrefix(value)
 	}
@@ -850,6 +855,11 @@ func updateOptionMap(key string, value string) (err error) {
 		err = operation_setting.AutomaticDisableStatusCodesFromString(value)
 	case "AutomaticRetryStatusCodes":
 		err = operation_setting.AutomaticRetryStatusCodesFromString(value)
+	case operation_setting.ChannelScheduleTimezoneOptionKey:
+		var timezone string
+		if timezone, err = operation_setting.NormalizeChannelScheduleTimezone(value); err == nil {
+			operation_setting.ChannelScheduleTimezone = timezone
+		}
 	case "StreamCacheQueueLength":
 		setting.StreamCacheQueueLength, _ = strconv.Atoi(value)
 	case "PayMethods":

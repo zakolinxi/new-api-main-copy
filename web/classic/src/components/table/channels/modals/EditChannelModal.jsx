@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useContext, useEffect, useState, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   API,
@@ -94,7 +94,13 @@ import SecureVerificationModal from '../../../common/modals/SecureVerificationMo
 import StatusCodeRiskGuardModal from './StatusCodeRiskGuardModal';
 import ChannelKeyDisplay from '../../../common/ui/ChannelKeyDisplay';
 import { useSecureVerification } from '../../../../hooks/common/useSecureVerification';
-import { timestamp2string } from '../../../../helpers';
+import {
+  formatChannelScheduleOffsetLabel,
+  resolveChannelScheduleOffsetMinutes,
+  timestampToWallClock,
+  wallClockToTimestamp,
+} from '../../../../helpers/schedule-time';
+import { StatusContext } from '../../../../context/Status';
 import { parseChannelConnectionString } from '../../../../helpers/token';
 import { createApiCalls } from '../../../../services/secureVerification';
 import {
@@ -201,6 +207,14 @@ const FloatingChannelEditorShell = ({ children, footer }) => (
 
 const EditChannelModal = (props) => {
   const { t } = useTranslation();
+  const [statusState] = useContext(StatusContext);
+  // 定时下线按服务端配置的时区口径换算（默认 UTC+8），不使用浏览器本地时区，
+  // 否则同一个日期在不同地区的管理员手里会命中不同时刻。
+  const scheduleOffsetMinutes = resolveChannelScheduleOffsetMinutes(
+    statusState?.status,
+  );
+  const scheduleTimezoneLabel =
+    formatChannelScheduleOffsetLabel(scheduleOffsetMinutes);
   const channelId = props.editingChannel.id;
   const isEdit = channelId !== undefined;
   const [loading, setLoading] = useState(isEdit);
@@ -1174,8 +1188,11 @@ const EditChannelModal = (props) => {
         formApiRef.current.setValues({
           ...data,
           scheduled_disable_at: data.scheduled_disable_at
-            ? // 控件格式是 yyyy-MM-dd HH:mm，这里截掉秒避免回填时格式不匹配
-              timestamp2string(Number(data.scheduled_disable_at)).slice(0, 16)
+            ? // 控件格式是 yyyy-MM-dd HH:mm，回填时按服务端时区口径换算
+              timestampToWallClock(
+                Number(data.scheduled_disable_at),
+                scheduleOffsetMinutes,
+              )
             : '',
         });
       }
@@ -2187,19 +2204,24 @@ const EditChannelModal = (props) => {
     });
 
     let res;
-    // 定时下线：表单值可能是 "2026-12-01 09:30"、只有日期的 "2026-12-01" 或空。
-    // 空值一律按「不设置」提交 0；只有日期时 Date.parse 得到当天 00:00，即零点下线。
+    // 定时下线：表单值可能是日期控件返回的 Date、"2026-12-01 09:30"、只有日期的
+    // "2026-12-01" 或空。空值一律按「不设置」提交 0；只有日期时按当天 00:00 计算，
+    // 时区口径取服务端配置（默认 UTC+8），不随浏览器时区变化。
     const rawScheduledDisableAt = localInputs.scheduled_disable_at;
     let scheduledDisableAt = 0;
     if (typeof rawScheduledDisableAt === 'number') {
+      // 回填时 inputs 里可能仍是接口返回的时间戳，本身就是绝对时刻，直接沿用。
       scheduledDisableAt = rawScheduledDisableAt > 0 ? rawScheduledDisableAt : 0;
     } else if (rawScheduledDisableAt) {
-      const parsedScheduledDisableAt = Date.parse(rawScheduledDisableAt);
-      if (Number.isNaN(parsedScheduledDisableAt)) {
+      const converted = wallClockToTimestamp(
+        rawScheduledDisableAt,
+        scheduleOffsetMinutes,
+      );
+      if (Number.isNaN(converted)) {
         showInfo(t('定时下线时间格式错误'));
         return;
       }
-      scheduledDisableAt = Math.floor(parsedScheduledDisableAt / 1000);
+      scheduledDisableAt = converted;
     }
     if (
       scheduledDisableAt > 0 &&
@@ -2881,7 +2903,8 @@ const EditChannelModal = (props) => {
                       handleInputChange('scheduled_disable_at', value)
                     }
                     extraText={t(
-                      '到点后该渠道会自动停用（状态变为已禁用）并清除本条计划，重新上线请手动启用。只填写日期时按当天 00:00 计算。',
+                      '到点后该渠道会自动停用（状态变为已禁用）并清除本条计划，重新上线请手动启用。只填写日期时按当天 00:00 计算，时区口径为 {{timezone}}。',
+                      { timezone: scheduleTimezoneLabel },
                     )}
                   />
 

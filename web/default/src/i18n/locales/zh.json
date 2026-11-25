@@ -5053,6 +5053,10 @@
     "Latest IP · {{count}} distinct addresses": "最新 IP · 共 {{count}} 个地址",
     "This row merges {{count}} calls to the same model. Tokens, cache and cost are summed, while time, IP and first-token latency follow the newest call.": "这一行合并了同一模型的 {{count}} 次调用：Token、缓存与费用累加，时间、IP 与首字取最新一次。",
     "This log predates the username column, so its individual calls cannot be listed.": "这条日志早于用户名列上线，无法列出它的逐条调用。",
-    "Latest {{count}} of {{total}}": "显示最近 {{count}} 条，共 {{total}} 条"
+    "Latest {{count}} of {{total}}": "显示最近 {{count}} 条，共 {{total}} 条",
+    "Channel schedule timezone": "渠道定时下线时区",
+    "UTC+8 (Beijing time)": "UTC+8（北京时间）",
+    "Follow the server timezone": "跟随服务器本地时区",
+    "Scheduled channel disable converts the time you enter into a timestamp using this timezone, independent of the server timezone.": "定时下线按此时区把界面上填写的日期时间换算成时间戳，与服务器所在时区无关。"
   }
 }
