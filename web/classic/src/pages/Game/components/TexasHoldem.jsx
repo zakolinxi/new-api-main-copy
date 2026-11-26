@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Button, Typography, Space, Tag, Progress } from '@douyinfe/semi-ui';
 import { RedeemPanel } from './GameModal';
 
@@ -17,7 +23,8 @@ const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
 
 const freshDeck = () => {
   const d = [];
-  for (const s of SUITS) for (let i = 0; i < 13; i++) d.push({ suit: s, rank: RANKS[i], v: i + 2 });
+  for (const s of SUITS)
+    for (let i = 0; i < 13; i++) d.push({ suit: s, rank: RANKS[i], v: i + 2 });
   for (let i = d.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [d[i], d[j]] = [d[j], d[i]];
@@ -25,7 +32,6 @@ const freshDeck = () => {
   return d;
 };
 
-const cardText = (c) => (c ? `${c.rank}${c.suit}` : '');
 const cardKey = (c) => `${c.rank}:${c.suit}`;
 
 // ---- 手牌评估：7 张选最佳 5 张，返回可比较的分数数组 ----
@@ -35,8 +41,7 @@ const C5 = (() => {
     for (let b = a + 1; b < 4; b++)
       for (let c = b + 1; c < 5; c++)
         for (let d = c + 1; d < 6; d++)
-          for (let e = d + 1; e < 7; e++)
-            combos.push([a, b, c, d, e]);
+          for (let e = d + 1; e < 7; e++) combos.push([a, b, c, d, e]);
   return combos;
 })();
 
@@ -58,13 +63,15 @@ function evalFive(cards) {
 
   if (flush && straightHigh) return [8, straightHigh];
   if (groups[0].n === 4) return [7, groups[0].v, groups[1].v];
-  if (groups[0].n === 3 && groups[1].n === 2) return [6, groups[0].v, groups[1].v];
+  if (groups[0].n === 3 && groups[1].n === 2)
+    return [6, groups[0].v, groups[1].v];
   if (flush) return [5, ...vs];
   if (straightHigh) return [4, straightHigh];
   if (groups[0].n === 3) return [3, groups[0].v, groups[1].v, groups[2].v];
   if (groups[0].n === 2 && groups[1].n === 2)
     return [2, groups[0].v, groups[1].v, groups[2].v];
-  if (groups[0].n === 2) return [1, groups[0].v, groups[1].v, groups[2].v, groups[3].v];
+  if (groups[0].n === 2)
+    return [1, groups[0].v, groups[1].v, groups[2].v, groups[3].v];
   return [0, ...vs];
 }
 
@@ -85,7 +92,91 @@ function cmpScore(a, b) {
   return 0;
 }
 
-const HAND_NAMES = ['高牌', '一对', '两对', '三条', '顺子', '同花', '葫芦', '四条', '同花顺'];
+const HAND_NAMES = [
+  '高牌',
+  '一对',
+  '两对',
+  '三条',
+  '顺子',
+  '同花',
+  '葫芦',
+  '四条',
+  '同花顺',
+];
+
+// 任意张数（5/6/7）取最佳 5 张，用于实时显示手牌牌型；
+// evalBest7 写死了 7 张的下标，张数不足时会读到 undefined。
+function evalBest(cards) {
+  const n = cards.length;
+  if (n < 5) return null;
+  let best = null;
+  for (let a = 0; a < n - 4; a++)
+    for (let b = a + 1; b < n - 3; b++)
+      for (let c = b + 1; c < n - 2; c++)
+        for (let d = c + 1; d < n - 1; d++)
+          for (let e = d + 1; e < n; e++) {
+            const s = evalFive([
+              cards[a],
+              cards[b],
+              cards[c],
+              cards[d],
+              cards[e],
+            ]);
+            if (!best || cmpScore(s, best) > 0) best = s;
+          }
+  return best;
+}
+
+const handNameOf = (cards) => {
+  const best = evalBest(cards);
+  return best ? HAND_NAMES[best[0]] : '';
+};
+
+// 一张牌：左上角点数 + 中央花色；未翻开时画牌背
+const PokerCard = ({ card, hidden = false, size = 'md', dim = false }) => {
+  const dims =
+    size === 'lg' ? { w: 64, h: 90, fs: 22 } : { w: 50, h: 70, fs: 18 };
+  const base = {
+    width: dims.w,
+    height: dims.h,
+    borderRadius: 7,
+    boxShadow: '0 3px 8px rgba(0,0,0,.35)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 1,
+    fontWeight: 700,
+    flex: '0 0 auto',
+  };
+  if (!card || hidden) {
+    return (
+      <div
+        style={{
+          ...base,
+          background:
+            'repeating-linear-gradient(45deg, #1e3a8a, #1e3a8a 4px, #1d4ed8 4px, #1d4ed8 8px)',
+          border: '2px solid #e5e7eb',
+        }}
+      />
+    );
+  }
+  const red = card.suit === '♥' || card.suit === '♦';
+  return (
+    <div
+      style={{
+        ...base,
+        background: '#fff',
+        color: red ? '#dc2626' : '#111827',
+        border: '1px solid #d1d5db',
+        opacity: dim ? 0.5 : 1,
+      }}
+    >
+      <span style={{ fontSize: dims.fs }}>{card.rank}</span>
+      <span style={{ fontSize: dims.fs + 2 }}>{card.suit}</span>
+    </div>
+  );
+};
 
 // 蒙特卡洛胜率：myCards vs oppRandom，模拟 N 次
 function monteCarloWinRate(hole, board, sims = 220) {
@@ -123,9 +214,9 @@ function monteCarloWinRate(hole, board, sims = 220) {
 }
 
 // 游戏状态机
-const STREETS = ['preflop', 'flop', 'turn', 'river', 'showdown'];
-
-const TexasHoldem = ({ t }) => {
+const TexasHoldem = ({ t, testMode = false }) => {
+  // 测试模式：双方各 100 万筹码，其余规则不变
+  const START_CHIPS = testMode ? 1000000 : 1000;
   const [game, setGame] = useState(null); // 整局状态
   const [message, setMessage] = useState('');
   const [aiThinking, setAiThinking] = useState(false);
@@ -137,30 +228,56 @@ const TexasHoldem = ({ t }) => {
   const [log, setLog] = useState([]);
   const deckRef = useRef([]);
 
-  const bigBlind = useMemo(() => 10 * Math.pow(2, Math.floor(handsPlayed / 6)), [handsPlayed]);
+  const bigBlind = useMemo(
+    () => 10 * Math.pow(2, Math.floor(handsPlayed / 6)),
+    [handsPlayed],
+  );
 
   const addLog = (line) => setLog((l) => [line, ...l].slice(0, 8));
 
   const newHand = useCallback(() => {
+    // 筹码不够下大盲就不能再开牌：否则会扣成负数，整手牌都没法下注
+    const chips = game ? game.playerChips : START_CHIPS;
+    if (chips < bigBlind) {
+      setMessage(t('筹码不足，点「重新买入」回到 1000 继续。'));
+      return;
+    }
     const deck = freshDeck();
     deckRef.current = deck;
     const playerButton = game ? !game.buttonIsPlayer : true; // 轮转庄家
     const pCards = [deck.pop(), deck.pop()];
     const aCards = [deck.pop(), deck.pop()];
     const g = {
-      board: [], pot: 0, playerCards: pCards, aiCards: aCards,
-      playerChips: game ? game.playerChips : 1000,
-      aiChips: game ? game.aiChips : 1000,
-      playerBet: 0, aiBet: 0, playerTotal: 0, aiTotal: 0,
-      street: 'preflop', buttonIsPlayer: playerButton, toAct: 'player', allIn: false,
+      board: [],
+      pot: 0,
+      playerCards: pCards,
+      aiCards: aCards,
+      playerChips: chips,
+      aiChips: game ? game.aiChips : START_CHIPS,
+      playerBet: 0,
+      aiBet: 0,
+      playerTotal: 0,
+      aiTotal: 0,
+      street: 'preflop',
+      buttonIsPlayer: playerButton,
+      toAct: 'player',
+      allIn: false,
     };
     // 单挑规则：按钮位是小盲且翻牌前先行动
     if (playerButton) {
-      g.playerChips -= bigBlind / 2; g.playerBet = bigBlind / 2; g.playerTotal = bigBlind / 2;
-      g.aiChips -= bigBlind; g.aiBet = bigBlind; g.aiTotal = bigBlind;
+      g.playerChips -= bigBlind / 2;
+      g.playerBet = bigBlind / 2;
+      g.playerTotal = bigBlind / 2;
+      g.aiChips -= bigBlind;
+      g.aiBet = bigBlind;
+      g.aiTotal = bigBlind;
     } else {
-      g.aiChips -= bigBlind / 2; g.aiBet = bigBlind / 2; g.aiTotal = bigBlind / 2;
-      g.playerChips -= bigBlind; g.playerBet = bigBlind; g.playerTotal = bigBlind;
+      g.aiChips -= bigBlind / 2;
+      g.aiBet = bigBlind / 2;
+      g.aiTotal = bigBlind / 2;
+      g.playerChips -= bigBlind;
+      g.playerBet = bigBlind;
+      g.playerTotal = bigBlind;
     }
     g.pot = bigBlind * 1.5;
     setGame(g);
@@ -168,58 +285,105 @@ const TexasHoldem = ({ t }) => {
     setHandResult(null);
     setBetInput(bigBlind * 2);
     setMessage(t('盲注 {{bb}}，你的回合', { bb: bigBlind }));
-    addLog(`--- ${t('第 {{n}} 手', { n: handsPlayed + 1 })} · BB ${bigBlind} ---`);
+    addLog(
+      `--- ${t('第 {{n}} 手', { n: handsPlayed + 1 })} · BB ${bigBlind} ---`,
+    );
     setHandsPlayed((h) => h + 1);
   }, [game, bigBlind, handsPlayed, t]);
 
-  // AI 决策：蒙特卡洛 + 底池赔率
-  const aiDecide = useCallback((g) => {
-    const winRate = monteCarloWinRate(g.aiCards, g.board, 160);
-    const toCall = g.playerBet - g.aiBet;
-    const potOdds = toCall > 0 ? toCall / (g.pot + toCall) : 0;
-    const aggression = 0.55 + Math.random() * 0.25; // AI 性格波动
-    const r = Math.random();
+  // 破产后重新买入：双方都回到 1000 筹码，累计得分不清零
+  const rebuy = useCallback(() => {
+    setGame((g) =>
+      g
+        ? {
+            ...g,
+            playerChips: START_CHIPS,
+            aiChips: START_CHIPS,
+            pot: 0,
+            street: 'showdown',
+          }
+        : g,
+    );
+    setHandOver(true);
+    setHandResult(null);
+    setMessage(
+      t('已重新买入 {{n}} 筹码，点「发下一手」继续。', { n: START_CHIPS }),
+    );
+  }, [t, START_CHIPS]);
 
-    if (toCall <= 0) {
-      // 可以过牌
-      if (winRate > 0.62 && r < aggression) {
-        const raiseSize = Math.max(bigBlind, Math.round(g.pot * (0.5 + Math.random() * 0.5)));
-        return { action: 'raise', amount: Math.min(raiseSize, g.aiChips) };
+  // AI 决策：蒙特卡洛 + 底池赔率
+  const aiDecide = useCallback(
+    (g) => {
+      const winRate = monteCarloWinRate(g.aiCards, g.board, 160);
+      const toCall = g.playerBet - g.aiBet;
+      const potOdds = toCall > 0 ? toCall / (g.pot + toCall) : 0;
+      const aggression = 0.55 + Math.random() * 0.25; // AI 性格波动
+      const r = Math.random();
+
+      if (toCall <= 0) {
+        // 可以过牌
+        if (winRate > 0.62 && r < aggression) {
+          const raiseSize = Math.max(
+            bigBlind,
+            Math.round(g.pot * (0.5 + Math.random() * 0.5)),
+          );
+          return { action: 'raise', amount: Math.min(raiseSize, g.aiChips) };
+        }
+        return { action: 'check' };
       }
-      return { action: 'check' };
-    }
-    // 面对下注
-    if (winRate > potOdds + 0.22 && r < 0.25 && g.aiChips > toCall * 2.5) {
-      const raiseSize = Math.max(toCall * 2, Math.round(g.pot * 0.6));
-      return { action: 'raise', amount: Math.min(toCall + raiseSize, g.aiChips) };
-    }
-    if (winRate > potOdds + 0.02) return { action: 'call' };
-    if (winRate > potOdds - 0.06 && r < 0.3) return { action: 'call' }; // 偶尔浮跟
-    return { action: 'fold' };
-  }, [bigBlind]);
+      // 面对下注
+      if (winRate > potOdds + 0.22 && r < 0.25 && g.aiChips > toCall * 2.5) {
+        const raiseSize = Math.max(toCall * 2, Math.round(g.pot * 0.6));
+        return {
+          action: 'raise',
+          amount: Math.min(toCall + raiseSize, g.aiChips),
+        };
+      }
+      if (winRate > potOdds + 0.02) return { action: 'call' };
+      if (winRate > potOdds - 0.06 && r < 0.3) return { action: 'call' }; // 偶尔浮跟
+      return { action: 'fold' };
+    },
+    [bigBlind],
+  );
 
   // 街推进
-  const advanceStreet = useCallback((g) => {
-    const streets = ['preflop', 'flop', 'turn', 'river'];
-    const idx = streets.indexOf(g.street);
-    if (idx === streets.length - 1) {
-      // 摊牌
-      finishShowdown(g);
-      return;
-    }
-    const next = { ...g, street: streets[idx + 1], playerBet: 0, aiBet: 0, toAct: g.buttonIsPlayer ? 'player' : 'ai' };
-    if (next.street === 'flop') next.board = [deckRef.current.pop(), deckRef.current.pop(), deckRef.current.pop()];
-    else next.board = [...g.board, deckRef.current.pop()];
-    setGame(next);
-    setBetInput(bigBlind);
-    if (next.toAct === 'player') {
-      setMessage(t('翻牌阶段结束，你的回合'));
-    } else {
-      setMessage(t('AI 行动中…'));
-      setAiThinking(true);
-      setTimeout(() => runAiTurn(next), 900);
-    }
-  }, [bigBlind, t]);
+  const advanceStreet = useCallback(
+    (g) => {
+      const streets = ['preflop', 'flop', 'turn', 'river'];
+      const idx = streets.indexOf(g.street);
+      if (idx === streets.length - 1) {
+        // 摊牌
+        finishShowdown(g);
+        return;
+      }
+      // 翻牌后由非按钮位先行动（按钮位在翻牌前是小盲、先行动，翻牌后变最后行动）。
+      // 原来写成 buttonIsPlayer ? 'player' : 'ai'，等于让按钮位翻牌后仍然先行动，顺序反了。
+      const next = {
+        ...g,
+        street: streets[idx + 1],
+        playerBet: 0,
+        aiBet: 0,
+        toAct: g.buttonIsPlayer ? 'ai' : 'player',
+      };
+      if (next.street === 'flop')
+        next.board = [
+          deckRef.current.pop(),
+          deckRef.current.pop(),
+          deckRef.current.pop(),
+        ];
+      else next.board = [...g.board, deckRef.current.pop()];
+      setGame(next);
+      setBetInput(bigBlind);
+      if (next.toAct === 'player') {
+        setMessage(t('翻牌阶段结束，你的回合'));
+      } else {
+        setMessage(t('AI 行动中…'));
+        setAiThinking(true);
+        setTimeout(() => runAiTurn(next), 900);
+      }
+    },
+    [bigBlind, t],
+  );
 
   const finishShowdown = (g) => {
     const playerScore = evalBest7([...g.playerCards, ...g.board]);
@@ -233,7 +397,12 @@ const TexasHoldem = ({ t }) => {
     };
     if (cmp > 0) {
       g = { ...g, playerChips: g.playerChips + g.pot };
-      addLog(t('摊牌胜利：{{hand}} 赢得 {{pot}}', { hand: result.playerHandName, pot: g.pot }));
+      addLog(
+        t('摊牌胜利：{{hand}} 赢得 {{pot}}', {
+          hand: result.playerHandName,
+          pot: g.pot,
+        }),
+      );
       setCumScore((s) => s + Math.floor(g.pot / 2));
     } else if (cmp < 0) {
       g = { ...g, aiChips: g.aiChips + g.pot };
@@ -251,77 +420,108 @@ const TexasHoldem = ({ t }) => {
     setHandResult(result);
     setHandOver(true);
     setMessage(
-      cmp > 0 ? t('🎉 你赢得底池 {{pot}}！', { pot: result.pot })
-        : cmp < 0 ? t('AI 赢得底池 {{pot}}', { pot: result.pot })
-        : t('平局，平分底池'),
+      cmp > 0
+        ? t('🎉 你赢得底池 {{pot}}！', { pot: result.pot })
+        : cmp < 0
+          ? t('AI 赢得底池 {{pot}}', { pot: result.pot })
+          : t('平局，平分底池'),
     );
   };
 
   const awardPot = (g, winner) => {
     if (winner === 'player') {
-      const next = { ...g, playerChips: g.playerChips + g.pot, pot: 0, street: 'showdown' };
+      const next = {
+        ...g,
+        playerChips: g.playerChips + g.pot,
+        pot: 0,
+        street: 'showdown',
+      };
       addLog(t('AI 弃牌，你赢得 {{pot}}', { pot: g.pot }));
       setCumScore((s) => s + Math.floor(g.pot / 2));
       setGame(next);
-      setHandResult({ outcome: 'win', pot: g.pot, playerHandName: '', aiHandName: '' });
+      setHandResult({
+        outcome: 'win',
+        pot: g.pot,
+        playerHandName: '',
+        aiHandName: '',
+      });
       setMessage(t('AI 弃牌，你赢得底池 {{pot}}！', { pot: g.pot }));
     } else {
-      const next = { ...g, aiChips: g.aiChips + g.pot, pot: 0, street: 'showdown' };
+      const next = {
+        ...g,
+        aiChips: g.aiChips + g.pot,
+        pot: 0,
+        street: 'showdown',
+      };
       addLog(t('你弃牌，AI 赢得 {{pot}}', { pot: g.pot }));
       setGame(next);
-      setHandResult({ outcome: 'lose', pot: g.pot, playerHandName: '', aiHandName: '' });
+      setHandResult({
+        outcome: 'lose',
+        pot: g.pot,
+        playerHandName: '',
+        aiHandName: '',
+      });
       setMessage(t('你弃牌，AI 赢得底池 {{pot}}', { pot: g.pot }));
     }
     setHandOver(true);
   };
 
-  const runAiTurn = useCallback((gState) => {
-    const decision = aiDecide(gState);
-    setAiThinking(false);
-    if (decision.action === 'fold') {
-      awardPot(gState, 'player');
-      return;
-    }
-    let g = { ...gState };
-    if (decision.action === 'check') {
-      addLog(t('AI 过牌'));
-      // 双方过牌 → 推进街
-      if (g.playerBet === g.aiBet) {
-        advanceStreet(g);
-      } else {
-        g.toAct = 'player';
-        setGame(g);
-        setMessage(t('你的回合'));
+  const runAiTurn = useCallback(
+    (gState) => {
+      const decision = aiDecide(gState);
+      setAiThinking(false);
+      if (decision.action === 'fold') {
+        awardPot(gState, 'player');
+        return;
       }
-      return;
-    }
-    if (decision.action === 'call') {
-      const toCall = g.playerBet - g.aiBet;
-      const pay = Math.min(toCall, g.aiChips);
-      g.aiChips -= pay; g.aiBet += pay; g.aiTotal += pay; g.pot += pay;
-      addLog(t('AI 跟注 {{n}}', { n: pay }));
-      if (g.aiChips === 0 || g.playerBet === g.aiBet) {
-        if (g.playerChips === 0 || g.aiChips === 0) {
-          // all-in 直接连发到河牌摊牌
-          dealToRiver(g);
-          return;
+      let g = { ...gState };
+      if (decision.action === 'check') {
+        addLog(t('AI 过牌'));
+        // 双方过牌 → 推进街
+        if (g.playerBet === g.aiBet) {
+          advanceStreet(g);
+        } else {
+          g.toAct = 'player';
+          setGame(g);
+          setMessage(t('你的回合'));
         }
-        advanceStreet(g);
-      } else {
-        g.toAct = 'player';
-        setGame(g);
-        setMessage(t('你的回合'));
+        return;
       }
-      return;
-    }
-    // raise
-    const pay = Math.min(decision.amount, g.aiChips);
-    g.aiChips -= pay; g.aiBet += pay; g.aiTotal += pay; g.pot += pay;
-    addLog(t('AI 加注到 {{n}}', { n: g.aiBet }));
-    g.toAct = 'player';
-    setGame(g);
-    setMessage(t('AI 加注到 {{n}}，你的回合', { n: g.aiBet }));
-  }, [aiDecide, advanceStreet, t]);
+      if (decision.action === 'call') {
+        const toCall = g.playerBet - g.aiBet;
+        const pay = Math.min(toCall, g.aiChips);
+        g.aiChips -= pay;
+        g.aiBet += pay;
+        g.aiTotal += pay;
+        g.pot += pay;
+        addLog(t('AI 跟注 {{n}}', { n: pay }));
+        if (g.aiChips === 0 || g.playerBet === g.aiBet) {
+          if (g.playerChips === 0 || g.aiChips === 0) {
+            // all-in 直接连发到河牌摊牌
+            dealToRiver(g);
+            return;
+          }
+          advanceStreet(g);
+        } else {
+          g.toAct = 'player';
+          setGame(g);
+          setMessage(t('你的回合'));
+        }
+        return;
+      }
+      // raise
+      const pay = Math.min(decision.amount, g.aiChips);
+      g.aiChips -= pay;
+      g.aiBet += pay;
+      g.aiTotal += pay;
+      g.pot += pay;
+      addLog(t('AI 加注到 {{n}}', { n: g.aiBet }));
+      g.toAct = 'player';
+      setGame(g);
+      setMessage(t('AI 加注到 {{n}}，你的回合', { n: g.aiBet }));
+    },
+    [aiDecide, advanceStreet, t],
+  );
 
   const dealToRiver = (g) => {
     // 双方 all-in：自动发完公共牌摊牌
@@ -335,7 +535,8 @@ const TexasHoldem = ({ t }) => {
   };
 
   // 玩家行动
-  const playerAct = (action) => {
+  // 玩家行动 amount 只用于加注：滑杆值可能被 min/max 夹过，必须按传入值算
+  const playerAct = (action, amount) => {
     if (!game || game.toAct !== 'player' || handOver) return;
     let g = { ...game };
     if (action === 'fold') {
@@ -366,7 +567,10 @@ const TexasHoldem = ({ t }) => {
       const toCall = g.aiBet - g.playerBet;
       const pay = Math.min(toCall, g.playerChips);
       if (pay <= 0) return;
-      g.playerChips -= pay; g.playerBet += pay; g.playerTotal += pay; g.pot += pay;
+      g.playerChips -= pay;
+      g.playerBet += pay;
+      g.playerTotal += pay;
+      g.pot += pay;
       addLog(t('你跟注 {{n}}', { n: pay }));
       if (g.playerChips === 0 || g.aiChips === 0) {
         dealToRiver(g);
@@ -384,10 +588,16 @@ const TexasHoldem = ({ t }) => {
       return;
     }
     if (action === 'raise') {
-      const raiseTo = Math.min(betInput, g.playerChips + g.playerBet);
+      const raiseTo = Math.min(
+        Number(amount) || betInput,
+        g.playerChips + g.playerBet,
+      );
       const pay = raiseTo - g.playerBet;
       if (pay <= 0) return;
-      g.playerChips -= pay; g.playerBet = raiseTo; g.playerTotal += pay; g.pot += pay;
+      g.playerChips -= pay;
+      g.playerBet = raiseTo;
+      g.playerTotal += pay;
+      g.pot += pay;
       addLog(t('你加注到 {{n}}', { n: raiseTo }));
       g.toAct = 'ai';
       setGame(g);
@@ -398,7 +608,10 @@ const TexasHoldem = ({ t }) => {
     }
     if (action === 'allin') {
       const pay = g.playerChips;
-      g.playerChips = 0; g.playerBet += pay; g.playerTotal += pay; g.pot += pay;
+      g.playerChips = 0;
+      g.playerBet += pay;
+      g.playerTotal += pay;
+      g.pot += pay;
       addLog(t('你全下 {{n}}！', { n: pay }));
       g.toAct = 'ai';
       setGame(g);
@@ -413,7 +626,10 @@ const TexasHoldem = ({ t }) => {
           const toCall = g.playerBet - g.aiBet;
           const pay2 = Math.min(toCall, g.aiChips);
           let g2 = { ...g };
-          g2.aiChips -= pay2; g2.aiBet += pay2; g2.aiTotal += pay2; g2.pot += pay2;
+          g2.aiChips -= pay2;
+          g2.aiBet += pay2;
+          g2.aiTotal += pay2;
+          g2.pot += pay2;
           addLog(t('AI 跟注全下 {{n}}！', { n: pay2 }));
           setGame(g2);
           setTimeout(() => dealToRiver(g2), 700);
@@ -425,7 +641,25 @@ const TexasHoldem = ({ t }) => {
 
   const toCall = game ? game.aiBet - game.playerBet : 0;
   const canCheck = toCall <= 0;
-  const minRaise = game ? game.aiBet + bigBlind : bigBlind;
+  // 筹码不够一个最小加注时，滑杆的 min 会超过 max（min/max 倒挂），
+  // 这里把 min 压到当前上限，滑杆才不会跳变。
+  const maxBet = game ? game.playerChips + game.playerBet : 0;
+  const minRaise = game ? Math.min(game.aiBet + bigBlind, maxBet) : bigBlind;
+  const sliderValue = Math.max(minRaise, Math.min(betInput, maxBet));
+  const busted = !!game && game.playerChips <= 0 && handOver;
+  const myHandName = useMemo(
+    () =>
+      game && !handOver ? handNameOf([...game.playerCards, ...game.board]) : '',
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [game?.playerCards, game?.board, handOver],
+  );
+  const STREET_LABELS = {
+    preflop: '翻牌前',
+    flop: '翻牌',
+    turn: '转牌',
+    river: '河牌',
+    showdown: '摊牌',
+  };
   const winRateDisplay = useMemo(() => {
     if (!game || !game.playerCards.length || handOver) return null;
     return monteCarloWinRate(game.playerCards, game.board, 120);
@@ -435,18 +669,34 @@ const TexasHoldem = ({ t }) => {
   if (!game) {
     return (
       <div>
-        <div className='rounded-xl p-8 text-center' style={{ background: '#07402e' }}>
+        <div
+          className='rounded-xl p-8 text-center'
+          style={{ background: '#07402e' }}
+        >
           <Text strong style={{ color: '#fbbf24', fontSize: 22 }}>
             🃏 {t('德州扑克 · 单挑桌')}
           </Text>
           <Text style={{ color: '#d1fae5' }} className='block mt-2'>
-            {t('起始各 1000 筹码，每 6 手盲注翻倍。AI 基于蒙特卡洛胜率实时决策。')}
+            {t(
+              '起始各 1000 筹码，每 6 手盲注翻倍。AI 基于蒙特卡洛胜率实时决策。',
+            )}
           </Text>
-          <Button theme='solid' type='warning' size='large' className='mt-4' onClick={newHand}>
+          <Button
+            theme='solid'
+            type='warning'
+            size='large'
+            className='mt-4'
+            onClick={newHand}
+          >
             {t('坐上牌桌')}
           </Button>
         </div>
-        <RedeemPanel gameKey='texas' score={cumScore} onRedeemed={(amount) => setCumScore((s) => Math.max(0, s - amount))} t={t} />
+        <RedeemPanel
+          gameKey='texas'
+          score={cumScore}
+          onRedeemed={(amount) => setCumScore((s) => Math.max(0, s - amount))}
+          t={t}
+        />
       </div>
     );
   }
@@ -456,67 +706,106 @@ const TexasHoldem = ({ t }) => {
       {/* 牌桌 */}
       <div
         className='rounded-xl p-5 relative'
-        style={{ background: 'linear-gradient(160deg, #0d5c3f, #07402e)', border: '6px solid #3f2a1d' }}
+        style={{
+          background: 'linear-gradient(160deg, #0d5c3f, #07402e)',
+          border: '6px solid #3f2a1d',
+        }}
       >
-        {/* AI 区 */}
-        <div className='flex items-center justify-between mb-3'>
+        {/* 顶栏：盲注 / 手数 / 累计得分 */}
+        <div className='flex items-center justify-between flex-wrap gap-2 mb-3'>
           <Space>
             <Tag color='orange'>{t('AI 对手')}</Tag>
-            <Text style={{ color: '#fbbf24' }} strong>{t('筹码')}: {game.aiChips}</Text>
-            {game.buttonIsPlayer ? null : <Tag size='small' color='yellow'>D</Tag>}
+            <Tag size='small' type='ghost' style={{ color: '#a7f3d0' }}>
+              BB {bigBlind}
+            </Tag>
+            <Tag size='small' type='ghost' style={{ color: '#a7f3d0' }}>
+              {t('第 {{n}} 手', { n: Math.max(1, handsPlayed) })}
+            </Tag>
           </Space>
-          <Text style={{ color: '#d1fae5' }}>
-            {aiThinking ? t('思考中…') : handOver
-              ? `${game.aiCards.map(cardText).join(' ')} (${handResult?.aiHandName})`
-              : '🂠 🂠'}
+          <Text style={{ color: '#fbbf24' }} strong>
+            {t('累计得分')}: {cumScore}
           </Text>
+        </div>
+
+        {/* AI 手牌 */}
+        <div className='flex items-center justify-between gap-3'>
+          <Space>
+            {!game.buttonIsPlayer && (
+              <Tag size='small' color='yellow'>
+                D
+              </Tag>
+            )}
+            <Text style={{ color: '#fbbf24' }} strong>
+              {t('筹码')}: {game.aiChips}
+            </Text>
+          </Space>
+          <div className='flex items-center gap-2'>
+            {aiThinking && (
+              <Text style={{ color: '#d1fae5' }} size='small'>
+                {t('思考中…')}
+              </Text>
+            )}
+            {handOver && handResult?.aiHandName && (
+              <Tag size='small' color='grey'>
+                {handResult.aiHandName}
+              </Tag>
+            )}
+            <div className='flex gap-1'>
+              {game.aiCards.map((c, i) => (
+                <PokerCard key={i} card={c} hidden={!handOver} size='sm' />
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* 公共牌 + 底池 */}
-        <div className='text-center my-5'>
+        <div className='text-center my-4'>
           <div className='flex justify-center gap-2'>
             {[0, 1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className='flex items-center justify-center rounded font-bold'
-                style={{
-                  width: 52, height: 72,
-                  background: game.board[i] ? '#fff' : '#ffffff22',
-                  color: game.board[i]?.suit === '♥' || game.board[i]?.suit === '♦' ? '#dc2626' : '#111',
-                  border: '1px solid #ffffff44',
-                  fontSize: 20,
-                }}
-              >
-                {game.board[i] ? cardText(game.board[i]) : ''}
-              </div>
+              <PokerCard key={i} card={game.board[i]} hidden={!game.board[i]} />
             ))}
           </div>
-          <Text style={{ color: '#fde68a' }} strong className='mt-2 block'>
-            {t('底池')}: {game.pot} {game.street !== 'showdown' && `· ${t(STREETS[STREETS.indexOf(game.street)] || '')}`}
-          </Text>
+          <div className='mt-3 flex items-center justify-center gap-2 flex-wrap'>
+            <Tag color='amber' size='large'>
+              {t('底池')} {game.pot}
+            </Tag>
+            {game.street !== 'showdown' && (
+              <Tag size='large' color='green'>
+                {t(STREET_LABELS[game.street] || '')}
+              </Tag>
+            )}
+            {toCall > 0 && !handOver && game.toAct === 'player' && (
+              <Tag size='large' color='red'>
+                {t('需跟注')} {Math.min(toCall, game.playerChips)}
+              </Tag>
+            )}
+          </div>
         </div>
 
         {/* 玩家区 */}
-        <div className='flex items-center justify-between'>
-          <div className='flex gap-2'>
-            {game.playerCards.map((c, i) => (
-              <div
-                key={i}
-                className='flex items-center justify-center rounded font-bold'
-                style={{
-                  width: 52, height: 72, background: '#fff',
-                  color: c.suit === '♥' || c.suit === '♦' ? '#dc2626' : '#111',
-                  fontSize: 20,
-                }}
-              >
-                {cardText(c)}
-              </div>
-            ))}
-          </div>
+        <div className='flex items-center justify-between gap-3'>
           <Space>
-            {game.buttonIsPlayer && <Tag size='small' color='yellow'>D</Tag>}
-            <Text style={{ color: '#fbbf24' }} strong>{t('你的筹码')}: {game.playerChips}</Text>
+            {game.buttonIsPlayer && (
+              <Tag size='small' color='yellow'>
+                D
+              </Tag>
+            )}
+            <Text style={{ color: '#fbbf24' }} strong>
+              {t('你的筹码')}: {game.playerChips}
+            </Text>
           </Space>
+          <div className='flex items-center gap-2'>
+            {myHandName && (
+              <Tag size='small' color='cyan'>
+                {t(myHandName)}
+              </Tag>
+            )}
+            <div className='flex gap-1'>
+              {game.playerCards.map((c, i) => (
+                <PokerCard key={i} card={c} size='lg' />
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* 胜率条 */}
@@ -537,7 +826,11 @@ const TexasHoldem = ({ t }) => {
 
       {/* 操作区 */}
       <div className='mt-3 flex items-center gap-2 flex-wrap'>
-        {handOver ? (
+        {busted ? (
+          <Button theme='solid' type='warning' size='large' onClick={rebuy}>
+            {t('重新买入 1000')}
+          </Button>
+        ) : handOver ? (
           <Button theme='solid' type='primary' size='large' onClick={newHand}>
             {t('发下一手')}
           </Button>
@@ -548,10 +841,14 @@ const TexasHoldem = ({ t }) => {
               onClick={() => playerAct(canCheck ? 'check' : 'fold')}
               type={canCheck ? 'primary' : 'danger'}
             >
-              {canCheck ? t('过牌') : `${t('弃牌')}`}
+              {canCheck ? t('过牌') : t('弃牌')}
             </Button>
             {!canCheck && (
-              <Button size='large' type='primary' onClick={() => playerAct('call')}>
+              <Button
+                size='large'
+                type='primary'
+                onClick={() => playerAct('call')}
+              >
                 {t('跟注')} {Math.min(toCall, game.playerChips)}
               </Button>
             )}
@@ -559,36 +856,87 @@ const TexasHoldem = ({ t }) => {
               <input
                 type='range'
                 min={minRaise}
-                max={game.playerChips + game.playerBet}
-                value={Math.min(betInput, game.playerChips + game.playerBet)}
+                max={Math.max(minRaise, maxBet)}
+                value={sliderValue}
                 onChange={(e) => setBetInput(+e.target.value)}
-                style={{ width: 140 }}
+                style={{ width: 150 }}
               />
-              <Text strong>{betInput}</Text>
+              <Text strong>{sliderValue}</Text>
             </div>
-            <Button size='large' type='warning' onClick={() => playerAct('raise')}>
-              {t('加注到')} {betInput}
+            <Button
+              size='small'
+              onClick={() =>
+                setBetInput(
+                  Math.min(
+                    maxBet,
+                    Math.max(minRaise, game.aiBet + Math.round(game.pot / 2)),
+                  ),
+                )
+              }
+            >
+              {t('½ 池')}
             </Button>
-            <Button size='large' type='danger' theme='solid' onClick={() => playerAct('allin')}>
+            <Button
+              size='small'
+              onClick={() =>
+                setBetInput(
+                  Math.min(maxBet, Math.max(minRaise, game.aiBet + game.pot)),
+                )
+              }
+            >
+              {t('满池')}
+            </Button>
+            <Button
+              size='large'
+              type='warning'
+              onClick={() => playerAct('raise', sliderValue)}
+            >
+              {t('加注到')} {sliderValue}
+            </Button>
+            <Button
+              size='large'
+              type='danger'
+              theme='solid'
+              onClick={() => playerAct('allin')}
+            >
               {t('全下')}
             </Button>
           </>
         ) : (
-          <Text type='secondary'>{aiThinking ? t('AI 正在计算胜率…') : ''}</Text>
+          <Text type='secondary'>
+            {aiThinking ? t('AI 正在计算胜率…') : t('等待 AI 行动')}
+          </Text>
         )}
       </div>
 
-      {message && <Text className='block mt-2' strong>{message}</Text>}
+      {message && (
+        <Text className='block mt-2' strong>
+          {message}
+        </Text>
+      )}
 
       {/* 牌局日志 */}
-      <div className='mt-3 rounded-lg p-2 text-xs' style={{ background: 'var(--semi-color-fill-0)', color: 'var(--semi-color-text-2)' }}>
-        {log.map((line, i) => <div key={i}>{line}</div>)}
+      <div
+        className='mt-3 rounded-lg p-2 text-xs'
+        style={{
+          background: 'var(--semi-color-fill-0)',
+          color: 'var(--semi-color-text-2)',
+        }}
+      >
+        {log.map((line, i) => (
+          <div key={i}>{line}</div>
+        ))}
       </div>
 
       <Text type='secondary' size='small' className='block mt-2'>
         {t('每赢一池按底池一半记分。盲注每 6 手翻倍，输光筹码即结束。')}
       </Text>
-      <RedeemPanel gameKey='texas' score={cumScore} onRedeemed={(amount) => setCumScore((s) => Math.max(0, s - amount))} t={t} />
+      <RedeemPanel
+        gameKey='texas'
+        score={cumScore}
+        onRedeemed={(amount) => setCumScore((s) => Math.max(0, s - amount))}
+        t={t}
+      />
     </div>
   );
 };

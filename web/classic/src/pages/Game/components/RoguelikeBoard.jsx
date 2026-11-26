@@ -137,11 +137,14 @@ const RoguelikeBoard = ({ t }) => {
         gameKey='roguelike'
         score={score}
         onRedeemed={(amount) => {
-          // 按实际兑换掉的分数扣减，剩下的余额继续留在本机
-          const left = Math.max(0, Math.floor(score) - amount);
-          if (left > 0) localStorage.setItem(EARNED_KEY, String(left));
-          else localStorage.removeItem(EARNED_KEY);
-          setScore(left);
+          // 用函数式更新：分批兑换要好几秒，期间 iframe 可能又上报了新分数，
+          // 用渲染时的 score 快照覆盖会把这段时间赚到的分一起抹掉。
+          setScore((prev) => {
+            const left = Math.max(0, Math.floor(prev) - amount);
+            if (left > 0) localStorage.setItem(EARNED_KEY, String(left));
+            else localStorage.removeItem(EARNED_KEY);
+            return left;
+          });
         }}
         t={t}
       />

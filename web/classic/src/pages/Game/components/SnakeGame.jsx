@@ -20,7 +20,10 @@ const SnakeGame = ({ t }) => {
   const gameCmdRef = useRef({ cmd: null });
 
   const hooks = useRef({
-    onScore: (n) => { scoreRef.current = n; syncScore(n); },
+    onScore: (n) => {
+      scoreRef.current = n;
+      syncScore(n);
+    },
     onSpeed: (lv) => setSpeedLevel(lv),
     onStatus: (s) => setStatus(s),
     onGolden: (g) => setGolden(g),
@@ -31,7 +34,9 @@ const SnakeGame = ({ t }) => {
     },
   });
 
-  const send = useCallback((cmd) => { gameCmdRef.current.cmd = cmd; }, []);
+  const send = useCallback((cmd) => {
+    gameCmdRef.current.cmd = cmd;
+  }, []);
 
   const { containerRef, error, loading } = usePhaserGame({
     width: VIEW,
@@ -39,7 +44,9 @@ const SnakeGame = ({ t }) => {
     backgroundColor: '#a2d149',
     sceneFactory: (Phaser) => {
       class SnakeScene extends Phaser.Scene {
-        constructor() { super('snake'); }
+        constructor() {
+          super('snake');
+        }
 
         create() {
           this.tickMs = 150;
@@ -59,7 +66,10 @@ const SnakeGame = ({ t }) => {
           for (let y = 0; y < GRID; y++)
             for (let x = 0; x < GRID; x++) {
               this.add.rectangle(
-                x * CELL + CELL / 2, y * CELL + CELL / 2, CELL, CELL,
+                x * CELL + CELL / 2,
+                y * CELL + CELL / 2,
+                CELL,
+                CELL,
                 (x + y) % 2 === 0 ? 0xaad751 : 0xa2d149,
               );
             }
@@ -82,8 +92,10 @@ const SnakeGame = ({ t }) => {
           // 键盘同时监听窗口，避免 Phaser 画布未获焦点时无法操作
           const onKeyDown = (e) => {
             const map = {
-              ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
-              ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 },
+              ArrowUp: { x: 0, y: -1 },
+              ArrowDown: { x: 0, y: 1 },
+              ArrowLeft: { x: -1, y: 0 },
+              ArrowRight: { x: 1, y: 0 },
             };
             if (e.key === ' ') {
               e.preventDefault();
@@ -93,8 +105,13 @@ const SnakeGame = ({ t }) => {
             const nd = map[e.key];
             if (!nd || !this.alive || this.paused) return;
             e.preventDefault();
-            const cur = this.queue.length ? this.queue[this.queue.length - 1] : this.dir;
-            if ((nd.x !== -cur.x || nd.y !== -cur.y) && (nd.x !== cur.x || nd.y !== cur.y)) {
+            const cur = this.queue.length
+              ? this.queue[this.queue.length - 1]
+              : this.dir;
+            if (
+              (nd.x !== -cur.x || nd.y !== -cur.y) &&
+              (nd.x !== cur.x || nd.y !== cur.y)
+            ) {
               if (this.queue.length < 3) this.queue.push(nd);
             }
           };
@@ -103,7 +120,8 @@ const SnakeGame = ({ t }) => {
         }
 
         shutdown() {
-          if (this._onWindowKeyDown) window.removeEventListener('keydown', this._onWindowKeyDown);
+          if (this._onWindowKeyDown)
+            window.removeEventListener('keydown', this._onWindowKeyDown);
         }
 
         togglePause() {
@@ -113,13 +131,20 @@ const SnakeGame = ({ t }) => {
 
         start() {
           this.rects?.forEach((r) => r.destroy());
-          if (this.foodObj) { this.foodObj.destroy(); this.foodObj = null; }
+          if (this.foodObj) {
+            this.foodObj.destroy();
+            this.foodObj = null;
+          }
           const cx = Math.floor(GRID / 2);
           this.cells = [];
           for (let i = 0; i < 3; i++) this.cells.push({ x: cx - i, y: cx });
           this.rects = this.cells.map((c) => {
             const rect = this.add.rectangle(
-              c.x * CELL + CELL / 2, c.y * CELL + CELL / 2, CELL - 3, CELL - 3, 0x487fb4,
+              c.x * CELL + CELL / 2,
+              c.y * CELL + CELL / 2,
+              CELL - 3,
+              CELL - 3,
+              0x487fb4,
             );
             return rect;
           });
@@ -138,8 +163,13 @@ const SnakeGame = ({ t }) => {
         }
 
         spawnFood() {
-          if (this.goldenTimer) { this.goldenTimer.remove(); this.goldenTimer = null; }
-          const occupied = new Set((this.cells || []).map((s) => `${s.x},${s.y}`));
+          if (this.goldenTimer) {
+            this.goldenTimer.remove();
+            this.goldenTimer = null;
+          }
+          const occupied = new Set(
+            (this.cells || []).map((s) => `${s.x},${s.y}`),
+          );
           let fx, fy;
           do {
             fx = Math.floor(Math.random() * GRID);
@@ -148,10 +178,20 @@ const SnakeGame = ({ t }) => {
           this.golden = Math.random() < 0.15;
           if (this.foodObj) this.foodObj.destroy();
           const color = this.golden ? 0xfbbf24 : 0xe7471d;
-          const food = this.add.circle(fx * CELL + CELL / 2, fy * CELL + CELL / 2, CELL * 0.42, color);
+          const food = this.add.circle(
+            fx * CELL + CELL / 2,
+            fy * CELL + CELL / 2,
+            CELL * 0.42,
+            color,
+          );
           if (this.golden) food.setStrokeStyle(3, 0xfff7ed);
           this.tweens.add({
-            targets: food, scale: { from: 1, to: 1.15 }, duration: 350, yoyo: true, repeat: -1, ease: 'sine.inout',
+            targets: food,
+            scale: { from: 1, to: 1.15 },
+            duration: 350,
+            yoyo: true,
+            repeat: -1,
+            ease: 'sine.inout',
           });
           this.food = { x: fx, y: fy };
           this.foodObj = food;
@@ -159,7 +199,12 @@ const SnakeGame = ({ t }) => {
           if (this.golden) {
             this.goldenTimer = this.time.delayedCall(6000, () => {
               if (this.foodObj) {
-                this.tweens.add({ targets: this.foodObj, alpha: 0, duration: 250, onComplete: () => this.spawnFood() });
+                this.tweens.add({
+                  targets: this.foodObj,
+                  alpha: 0,
+                  duration: 250,
+                  onComplete: () => this.spawnFood(),
+                });
               }
             });
           }
@@ -177,7 +222,12 @@ const SnakeGame = ({ t }) => {
           this.rects.forEach((r, i) => {
             this.time.delayedCall(i * 30, () => {
               r.setFillStyle(0x7f1d1d);
-              this.tweens.add({ targets: r, scale: 0.4, alpha: 0.3, duration: 220 });
+              this.tweens.add({
+                targets: r,
+                scale: 0.4,
+                alpha: 0.3,
+                duration: 220,
+              });
             });
           });
         }
@@ -201,7 +251,10 @@ const SnakeGame = ({ t }) => {
 
           // 撞墙/自撞（尾巴移走后原尾格可进，简化为包含尾格）
           const ate = this.food && nx === this.food.x && ny === this.food.y;
-          const hitSelf = this.cells.some((c, i) => c.x === nx && c.y === ny && (ate || i < this.cells.length - 1));
+          const hitSelf = this.cells.some(
+            (c, i) =>
+              c.x === nx && c.y === ny && (ate || i < this.cells.length - 1),
+          );
           if (nx < 0 || nx >= GRID || ny < 0 || ny >= GRID || hitSelf) {
             this.die();
             return;
@@ -213,7 +266,9 @@ const SnakeGame = ({ t }) => {
             const rect = this.add.rectangle(
               this.cells[this.cells.length - 1].x * CELL + CELL / 2,
               this.cells[this.cells.length - 1].y * CELL + CELL / 2,
-              CELL - 3, CELL - 3, 0x487fb4,
+              CELL - 3,
+              CELL - 3,
+              0x487fb4,
             );
             this.rects.push(rect);
           } else {
@@ -241,7 +296,10 @@ const SnakeGame = ({ t }) => {
             this._score = (this._score || 0) + gain;
             this.hooks.onScore(this._score);
             this.particles.setParticleTint(this.golden ? 0xfbbf24 : 0xe7471d);
-            this.particles.emitParticleAt(nx * CELL + CELL / 2, ny * CELL + CELL / 2);
+            this.particles.emitParticleAt(
+              nx * CELL + CELL / 2,
+              ny * CELL + CELL / 2,
+            );
             this.eaten += 1;
             if (this.eaten % 5 === 0 && this.tickMs > 70) {
               this.tickMs = Math.max(70, this.tickMs - 12);
@@ -260,8 +318,12 @@ const SnakeGame = ({ t }) => {
     <div>
       <div className='flex items-center justify-between mb-2 flex-wrap gap-2'>
         <Space>
-          <Tag color='green'>{t('得分')}: {score}</Tag>
-          <Tag color='blue'>{t('速度档')}: {speedLevel}</Tag>
+          <Tag color='green'>
+            {t('得分')}: {score}
+          </Tag>
+          <Tag color='blue'>
+            {t('速度档')}: {speedLevel}
+          </Tag>
           {golden && <Tag color='orange'>✨ {t('金色食物')}</Tag>}
         </Space>
         <Space>
@@ -270,18 +332,41 @@ const SnakeGame = ({ t }) => {
               {status === 'paused' ? t('继续') : t('暂停')}
             </Button>
           ) : null}
-          <Button size='small' theme='solid' type='primary' onClick={() => send('start')}>
+          <Button
+            size='small'
+            theme='solid'
+            type='primary'
+            onClick={() => send('start')}
+          >
             {status === 'idle' ? t('开始游戏') : t('重新开始')}
           </Button>
         </Space>
       </div>
-      {loading && <Text type='secondary' className='block text-center'>{t('正在加载游戏引擎…')}</Text>}
-      {error && <Text type='danger' className='block text-center'>{t('游戏引擎加载失败，请刷新重试')}</Text>}
-      <div ref={containerRef} style={{ width: '100%', maxWidth: VIEW, margin: '0 auto' }} />
+      {loading && (
+        <Text type='secondary' className='block text-center'>
+          {t('正在加载游戏引擎…')}
+        </Text>
+      )}
+      {error && (
+        <Text type='danger' className='block text-center'>
+          {t('游戏引擎加载失败，请刷新重试')}
+        </Text>
+      )}
+      <div
+        ref={containerRef}
+        style={{ width: '100%', maxWidth: VIEW, margin: '0 auto' }}
+      />
       <Text type='secondary' className='block mt-2 text-center'>
-        {t('方向键控制 · 空格暂停 · 普通食物 +100 · 金色 +500（限时 6 秒）· 引擎驱动物理与特效')}
+        {t(
+          '方向键控制 · 空格暂停 · 普通食物 +100 · 金色 +500（限时 6 秒）· 引擎驱动物理与特效',
+        )}
       </Text>
-      <RedeemPanel gameKey='snake' score={score} onRedeemed={settleScore} t={t} />
+      <RedeemPanel
+        gameKey='snake'
+        score={score}
+        onRedeemed={settleScore}
+        t={t}
+      />
     </div>
   );
 };

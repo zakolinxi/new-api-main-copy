@@ -8,13 +8,62 @@ const ROWS = 20;
 
 // 仿真俄罗斯方块：SRS 踢墙简化版、7-bag 随机、幽灵落点、硬降、Next 预览、等级加速、消行计分
 const SHAPES = {
-  I: { cells: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], color: '#22d3ee' },
-  O: { cells: [[1, 1], [1, 1]], color: '#facc15' },
-  T: { cells: [[0, 1, 0], [1, 1, 1], [0, 0, 0]], color: '#c084fc' },
-  S: { cells: [[0, 1, 1], [1, 1, 0], [0, 0, 0]], color: '#4ade80' },
-  Z: { cells: [[1, 1, 0], [0, 1, 1], [0, 0, 0]], color: '#f87171' },
-  J: { cells: [[1, 0, 0], [1, 1, 1], [0, 0, 0]], color: '#60a5fa' },
-  L: { cells: [[0, 0, 1], [1, 1, 1], [0, 0, 0]], color: '#fb923c' },
+  I: {
+    cells: [
+      [0, 0, 0, 0],
+      [1, 1, 1, 1],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ],
+    color: '#22d3ee',
+  },
+  O: {
+    cells: [
+      [1, 1],
+      [1, 1],
+    ],
+    color: '#facc15',
+  },
+  T: {
+    cells: [
+      [0, 1, 0],
+      [1, 1, 1],
+      [0, 0, 0],
+    ],
+    color: '#c084fc',
+  },
+  S: {
+    cells: [
+      [0, 1, 1],
+      [1, 1, 0],
+      [0, 0, 0],
+    ],
+    color: '#4ade80',
+  },
+  Z: {
+    cells: [
+      [1, 1, 0],
+      [0, 1, 1],
+      [0, 0, 0],
+    ],
+    color: '#f87171',
+  },
+  J: {
+    cells: [
+      [1, 0, 0],
+      [1, 1, 1],
+      [0, 0, 0],
+    ],
+    color: '#60a5fa',
+  },
+  L: {
+    cells: [
+      [0, 0, 1],
+      [1, 1, 1],
+      [0, 0, 0],
+    ],
+    color: '#fb923c',
+  },
 };
 
 // 7-bag：每 7 个一组洗牌，保证分布均匀
@@ -27,7 +76,7 @@ const makeBag = () => {
   return bag;
 };
 
-const TetrisToken = ({ t }) => {
+const TetrisToken = ({ t, testMode = false }) => {
   const [board, setBoard] = useState(() =>
     Array.from({ length: ROWS }, () => Array(COLS).fill(null)),
   );
@@ -72,49 +121,56 @@ const TetrisToken = ({ t }) => {
     return false;
   }, []);
 
-  const ghostY = useCallback((b, p) => {
-    let dy = 0;
-    while (!collides(b, p, 0, dy + 1)) dy++;
-    return p.y + dy;
-  }, [collides]);
+  const ghostY = useCallback(
+    (b, p) => {
+      let dy = 0;
+      while (!collides(b, p, 0, dy + 1)) dy++;
+      return p.y + dy;
+    },
+    [collides],
+  );
 
-  const lockPiece = useCallback((b, p) => {
-    const newBoard = b.map((row) => [...row]);
-    p.cells.forEach((row, r) =>
-      row.forEach((v, c) => {
-        if (v && p.y + r >= 0) newBoard[p.y + r][p.x + c] = SHAPES[p.key].color;
-      }),
-    );
-    // 消行
-    let cleared = 0;
-    for (let r = ROWS - 1; r >= 0; r--) {
-      if (newBoard[r].every((v) => v)) {
-        newBoard.splice(r, 1);
-        newBoard.unshift(Array(COLS).fill(null));
-        cleared++;
-        r++;
+  const lockPiece = useCallback(
+    (b, p) => {
+      const newBoard = b.map((row) => [...row]);
+      p.cells.forEach((row, r) =>
+        row.forEach((v, c) => {
+          if (v && p.y + r >= 0)
+            newBoard[p.y + r][p.x + c] = SHAPES[p.key].color;
+        }),
+      );
+      // 消行
+      let cleared = 0;
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (newBoard[r].every((v) => v)) {
+          newBoard.splice(r, 1);
+          newBoard.unshift(Array(COLS).fill(null));
+          cleared++;
+          r++;
+        }
       }
-    }
-    if (cleared > 0) {
-      const levelFactor = [0, 100, 300, 500, 800][cleared] * level;
-      setScore((s) => s + levelFactor);
-      setLines((l) => {
-        const nl = l + cleared;
-        const newLevel = Math.floor(nl / 10) + 1;
-        if (newLevel !== level) setLevel(newLevel);
-        return nl;
-      });
-    }
-    const next = takeNext();
-    if (collides(newBoard, next)) {
+      if (cleared > 0) {
+        const levelFactor = [0, 100, 300, 500, 800][cleared] * level;
+        setScore((s) => s + levelFactor);
+        setLines((l) => {
+          const nl = l + cleared;
+          const newLevel = Math.floor(nl / 10) + 1;
+          if (newLevel !== level) setLevel(newLevel);
+          return nl;
+        });
+      }
+      const next = takeNext();
+      if (collides(newBoard, next)) {
+        setBoard(newBoard);
+        setOver(true);
+        setRunning(false);
+        return;
+      }
       setBoard(newBoard);
-      setOver(true);
-      setRunning(false);
-      return;
-    }
-    setBoard(newBoard);
-    setPiece(next);
-  }, [collides, level, takeNext]);
+      setPiece(next);
+    },
+    [collides, level, takeNext],
+  );
 
   const step = useCallback(() => {
     const b = boardRef.current;
@@ -130,17 +186,21 @@ const TetrisToken = ({ t }) => {
   const dropInterval = Math.max(80, 600 - (level - 1) * 55);
 
   useEffect(() => {
-    if (!running || !piece) return;
+    if (!running) return;
+    // 不能把 piece 放进依赖：每次移动/旋转都会换掉 piece，计时器被重置后
+    // 方块只要按得够快就永远不下落。step 内部读 pieceRef，计时器只需保持存在。
     const timer = setInterval(step, dropInterval);
     return () => clearInterval(timer);
-  }, [running, piece, dropInterval, step]);
+  }, [running, dropInterval, step]);
 
   const rotate = useCallback(() => {
     const b = boardRef.current;
     const p = pieceRef.current;
     if (!p) return;
     // 顺时针旋转矩阵
-    const rotated = p.cells[0].map((_, c) => p.cells.map((row) => row[c]).reverse());
+    const rotated = p.cells[0].map((_, c) =>
+      p.cells.map((row) => row[c]).reverse(),
+    );
     // 简化踢墙：右移/左移最多 2 格
     const kicks = [0, 1, -1, 2, -2];
     for (const k of kicks) {
@@ -209,6 +269,14 @@ const TetrisToken = ({ t }) => {
     setRunning(true);
   };
 
+  // 测试模式：直接从第 10 级开始（约 100ms/格），棋盘为空
+  useEffect(() => {
+    if (!testMode) return;
+    start();
+    setLevel(10);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 渲染棋盘（含幽灵）
   const display = board.map((row) => [...row]);
   let ghostCells = [];
@@ -223,7 +291,13 @@ const TetrisToken = ({ t }) => {
   if (piece) {
     piece.cells.forEach((row, r) =>
       row.forEach((v, c) => {
-        if (v && piece.y + r >= 0 && piece.y + r < ROWS && piece.x + c >= 0 && piece.x + c < COLS) {
+        if (
+          v &&
+          piece.y + r >= 0 &&
+          piece.y + r < ROWS &&
+          piece.x + c >= 0 &&
+          piece.x + c < COLS
+        ) {
           display[piece.y + r][piece.x + c] = SHAPES[piece.key].color;
         }
       }),
@@ -237,17 +311,26 @@ const TetrisToken = ({ t }) => {
     <div>
       <div className='flex items-center justify-between mb-2 flex-wrap gap-2'>
         <Space>
-          <Tag color='green'>{t('得分')}: {score}</Tag>
-          <Tag color='blue'>{t('行数')}: {lines}</Tag>
+          <Tag color='green'>
+            {t('得分')}: {score}
+          </Tag>
+          <Tag color='blue'>
+            {t('行数')}: {lines}
+          </Tag>
           <Tag color='violet'>Lv.{level}</Tag>
         </Space>
-        <Button size='small' onClick={start}>{over || !running ? t('开始') : t('重新开始')}</Button>
+        <Button size='small' onClick={start}>
+          {over || !running ? t('开始') : t('重新开始')}
+        </Button>
       </div>
 
       <div className='flex gap-4 items-start justify-center'>
         <div
           className='grid gap-px rounded p-1'
-          style={{ gridTemplateColumns: `repeat(${COLS}, 22px)`, background: '#111827' }}
+          style={{
+            gridTemplateColumns: `repeat(${COLS}, 22px)`,
+            background: '#111827',
+          }}
         >
           {display.map((row, r) =>
             row.map((color, c) => {
@@ -256,7 +339,8 @@ const TetrisToken = ({ t }) => {
                 <div
                   key={`${r}-${c}`}
                   style={{
-                    width: 22, height: 22,
+                    width: 22,
+                    height: 22,
                     background: color || (isGhost ? '#ffffff22' : '#1f2937'),
                     borderRadius: color ? 3 : 1,
                     border: isGhost ? '1px dashed #ffffff55' : 'none',
@@ -269,8 +353,13 @@ const TetrisToken = ({ t }) => {
         </div>
 
         {/* Next 预览 */}
-        <div className='rounded-lg p-3' style={{ background: 'var(--semi-color-fill-0)' }}>
-          <Text strong className='block mb-2'>{t('下一个')}</Text>
+        <div
+          className='rounded-lg p-3'
+          style={{ background: 'var(--semi-color-fill-0)' }}
+        >
+          <Text strong className='block mb-2'>
+            {t('下一个')}
+          </Text>
           {nextPiece ? (
             <div
               className='grid gap-px'
@@ -282,7 +371,8 @@ const TetrisToken = ({ t }) => {
                 <div
                   key={i}
                   style={{
-                    width: 16, height: 16,
+                    width: 16,
+                    height: 16,
                     background: v ? SHAPES[nextPiece].color : 'transparent',
                     borderRadius: 2,
                   }}
@@ -302,10 +392,22 @@ const TetrisToken = ({ t }) => {
       </div>
 
       <Text type='secondary' className='block mt-2 text-center'>
-        {t('消行 × 等级：1行100×L / 2行300×L / 3行500×L / 4行800×L，每 10 行升一级加速。')}
+        {t(
+          '消行 × 等级：1行100×L / 2行300×L / 3行500×L / 4行800×L，每 10 行升一级加速。',
+        )}
       </Text>
-      {over && <Text type='danger' strong className='block mt-1 text-center'>{t('游戏结束！')}{t('最终得分')} {score}</Text>}
-      <RedeemPanel gameKey='tetris' score={score} onRedeemed={(amount) => setScore((s) => Math.max(0, s - amount))} t={t} />
+      {over && (
+        <Text type='danger' strong className='block mt-1 text-center'>
+          {t('游戏结束！')}
+          {t('最终得分')} {score}
+        </Text>
+      )}
+      <RedeemPanel
+        gameKey='tetris'
+        score={score}
+        onRedeemed={(amount) => setScore((s) => Math.max(0, s - amount))}
+        t={t}
+      />
     </div>
   );
 };

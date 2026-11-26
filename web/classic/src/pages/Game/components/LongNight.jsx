@@ -8,7 +8,7 @@ const { Text } = Typography;
 // 怪物随时间增多，火光弱时掉血。活得越久分越高。
 const DURATION = 120; // 秒
 
-const LongNight = ({ t }) => {
+const LongNight = ({ t, testMode = false }) => {
   const [fire, setFire] = useState(100);
   const [hp, setHp] = useState(100);
   const [time, setTime] = useState(0);
@@ -17,6 +17,14 @@ const LongNight = ({ t }) => {
   const [score, setScore] = useState(0);
   const [wave, setWave] = useState(1);
   const [woodLeft, setWoodLeft] = useState(12);
+
+  // 火势每 500ms 变一次。若把 fire 放进伤害计时器的依赖里，1000ms 的计时器
+  // 会在每次火势变化时被清掉重建，永远等不到触发，玩家就完全不会掉血。
+  // 这里用 ref 让伤害计时器读到最新火势，而计时器本身只在开始/结束时重建。
+  const fireRef = useRef(fire);
+  useEffect(() => {
+    fireRef.current = fire;
+  }, [fire]);
 
   useEffect(() => {
     if (!running) return;
@@ -49,14 +57,15 @@ const LongNight = ({ t }) => {
   useEffect(() => {
     if (!running) return;
     const monster = setInterval(() => {
+      const f = fireRef.current;
       setHp((h) => {
-        if (fire < 30) return Math.max(0, h - 4);
-        if (fire < 60) return Math.max(0, h - 1);
+        if (f < 30) return Math.max(0, h - 4);
+        if (f < 60) return Math.max(0, h - 1);
         return h;
       });
     }, 1000);
     return () => clearInterval(monster);
-  }, [running, fire]);
+  }, [running]);
 
   useEffect(() => {
     if (running && hp <= 0) {
@@ -72,6 +81,16 @@ const LongNight = ({ t }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [over]);
+
+  // 测试模式：直接从第 90 秒（最后一波）开始，火势与生命全满、木柴充足
+  useEffect(() => {
+    if (!testMode) return;
+    setTime(90);
+    setFire(100);
+    setHp(100);
+    setWoodLeft(99);
+    setRunning(true);
+  }, [testMode]);
 
   const addWood = () => {
     if (!running || woodLeft <= 0) return;
@@ -97,25 +116,45 @@ const LongNight = ({ t }) => {
     <div>
       <div className='flex items-center justify-between mb-2 flex-wrap gap-2'>
         <Text strong>
-          {isDawn ? t('☀️ 天亮了！') : t('黑夜')} {time}/{DURATION}s · {t('第{{w}}波', { w: wave })}
+          {isDawn ? t('☀️ 天亮了！') : t('黑夜')} {time}/{DURATION}s ·{' '}
+          {t('第{{w}}波', { w: wave })}
         </Text>
-        <Button size='small' onClick={start}>{running ? t('重新开始') : t('开始')}</Button>
+        <Button size='small' onClick={start}>
+          {running ? t('重新开始') : t('开始')}
+        </Button>
       </div>
 
       <div
         className='rounded-lg flex flex-col items-center justify-center py-10 relative overflow-hidden'
-        style={{ background: over ? (isDawn ? '#78350f22' : '#111827') : '#111827' }}
+        style={{
+          background: over ? (isDawn ? '#78350f22' : '#111827') : '#111827',
+        }}
       >
-        <div style={{ fontSize: 72, filter: `brightness(${0.4 + fire / 160})` }}>
+        <div
+          style={{ fontSize: 72, filter: `brightness(${0.4 + fire / 160})` }}
+        >
           {fire > 0 ? '🔥' : '💀'}
         </div>
         <Text style={{ color: '#d1d5db' }} className='mt-2'>
           {over
-            ? isDawn ? t('你熬过了漫漫长夜！+3000') : t('你倒在了黑夜中……')
-            : fire > 60 ? t('篝火正旺，怪物不敢靠近') : fire > 30 ? t('火光渐弱，怪物蠢蠢欲动') : t('黑暗逼近！怪物在攻击你！')}
+            ? isDawn
+              ? t('你熬过了漫漫长夜！+3000')
+              : t('你倒在了黑夜中……')
+            : fire > 60
+              ? t('篝火正旺，怪物不敢靠近')
+              : fire > 30
+                ? t('火光渐弱，怪物蠢蠢欲动')
+                : t('黑暗逼近！怪物在攻击你！')}
         </Text>
         {!over && running && (
-            <Button theme='solid' type='warning' size='large' className='mt-4' onClick={addWood} disabled={woodLeft <= 0}>
+          <Button
+            theme='solid'
+            type='warning'
+            size='large'
+            className='mt-4'
+            onClick={addWood}
+            disabled={woodLeft <= 0}
+          >
             {t('添柴 +15 火力')} ({woodLeft})
           </Button>
         )}
@@ -123,19 +162,34 @@ const LongNight = ({ t }) => {
 
       <div className='mt-3 space-y-2'>
         <div>
-          <Text type='secondary' size='small'>{t('篝火')}</Text>
+          <Text type='secondary' size='small'>
+            {t('篝火')}
+          </Text>
           <Progress percent={fire} stroke={fireColor} showInfo={false} />
         </div>
         <div>
-          <Text type='secondary' size='small'>{t('生命')}</Text>
-          <Progress percent={hp} stroke={hp > 50 ? '#22c55e' : '#ef4444'} showInfo={false} />
+          <Text type='secondary' size='small'>
+            {t('生命')}
+          </Text>
+          <Progress
+            percent={hp}
+            stroke={hp > 50 ? '#22c55e' : '#ef4444'}
+            showInfo={false}
+          />
         </div>
       </div>
 
       <Text type='secondary' className='block mt-2'>
-        {t('熬 120 秒到天亮。火会越烧越快，火弱时怪物伤你。每秒存活 20 分，天亮 +3000。每局最多添柴 12 次。')}
+        {t(
+          '熬 120 秒到天亮。火会越烧越快，火弱时怪物伤你。每秒存活 20 分，天亮 +3000。每局最多添柴 12 次。',
+        )}
       </Text>
-      <RedeemPanel gameKey='longnight' score={score} onRedeemed={(amount) => setScore((s) => Math.max(0, s - amount))} t={t} />
+      <RedeemPanel
+        gameKey='longnight'
+        score={score}
+        onRedeemed={(amount) => setScore((s) => Math.max(0, s - amount))}
+        t={t}
+      />
     </div>
   );
 };

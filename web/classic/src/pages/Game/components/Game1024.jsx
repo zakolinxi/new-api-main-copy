@@ -31,7 +31,9 @@ const TILE_COLORS = {
 const Game1024 = ({ t }) => {
   const { score, sync: syncScore, settle: settleScore } = useRedeemableScore();
   const [over, setOver] = useState(false);
-  const [best, setBest] = useState(() => Number(localStorage.getItem('g1024-best') || 0));
+  const [best, setBest] = useState(() =>
+    Number(localStorage.getItem('g1024-best') || 0),
+  );
   const cmdRef = useRef({ cmd: null });
   const hooks = useRef({
     onScore: (s) => {
@@ -51,7 +53,9 @@ const Game1024 = ({ t }) => {
     },
   });
 
-  const send = useCallback((cmd) => { cmdRef.current.cmd = cmd; }, []);
+  const send = useCallback((cmd) => {
+    cmdRef.current.cmd = cmd;
+  }, []);
 
   const { containerRef, error, loading } = usePhaserGame({
     width: SIZE,
@@ -59,7 +63,9 @@ const Game1024 = ({ t }) => {
     backgroundColor: '#bbada0',
     sceneFactory: (Phaser) => {
       class G1024Scene extends Phaser.Scene {
-        constructor() { super('g1024'); }
+        constructor() {
+          super('g1024');
+        }
 
         create() {
           this.grid = Array.from({ length: N }, () => Array(N).fill(null));
@@ -73,18 +79,24 @@ const Game1024 = ({ t }) => {
               this.add.rectangle(
                 ORIGIN + c * (TILE + GAP) + TILE / 2,
                 ORIGIN + r * (TILE + GAP) + TILE / 2,
-                TILE, TILE, 0xcdc1b4, 0.35,
+                TILE,
+                TILE,
+                0xcdc1b4,
+                0.35,
               );
             }
 
           // 手势
-          this.input.on('pointerdown', (p) => { this.touchStart = { x: p.x, y: p.y }; });
+          this.input.on('pointerdown', (p) => {
+            this.touchStart = { x: p.x, y: p.y };
+          });
           this.input.on('pointerup', (p) => {
             if (!this.touchStart) return;
             const dx = p.x - this.touchStart.x;
             const dy = p.y - this.touchStart.y;
             if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
-            if (Math.abs(dx) > Math.abs(dy)) this.move(dx > 0 ? 'right' : 'left');
+            if (Math.abs(dx) > Math.abs(dy))
+              this.move(dx > 0 ? 'right' : 'left');
             else this.move(dy > 0 ? 'down' : 'up');
             this.touchStart = null;
           });
@@ -92,12 +104,24 @@ const Game1024 = ({ t }) => {
           // 键盘：同时监听窗口，避免焦点停留在页面按钮时方向键失效
           const onKeyDown = (e) => {
             const map = {
-              ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
-              a: 'left', d: 'right', w: 'up', s: 'down',
-              A: 'left', D: 'right', W: 'up', S: 'down',
+              ArrowLeft: 'left',
+              ArrowRight: 'right',
+              ArrowUp: 'up',
+              ArrowDown: 'down',
+              a: 'left',
+              d: 'right',
+              w: 'up',
+              s: 'down',
+              A: 'left',
+              D: 'right',
+              W: 'up',
+              S: 'down',
             };
             const dir = map[e.key];
-            if (dir) { e.preventDefault(); this.move(dir); }
+            if (dir) {
+              e.preventDefault();
+              this.move(dir);
+            }
           };
           this._onWindowKeyDown = onKeyDown;
           window.addEventListener('keydown', onKeyDown);
@@ -107,32 +131,48 @@ const Game1024 = ({ t }) => {
         }
 
         shutdown() {
-          if (this._onWindowKeyDown) window.removeEventListener('keydown', this._onWindowKeyDown);
+          if (this._onWindowKeyDown)
+            window.removeEventListener('keydown', this._onWindowKeyDown);
         }
 
         pos(r, c) {
-          return { x: ORIGIN + c * (TILE + GAP) + TILE / 2, y: ORIGIN + r * (TILE + GAP) + TILE / 2 };
+          return {
+            x: ORIGIN + c * (TILE + GAP) + TILE / 2,
+            y: ORIGIN + r * (TILE + GAP) + TILE / 2,
+          };
         }
 
         makeTile(r, c, value) {
           const { x, y } = this.pos(r, c);
           const style = TILE_COLORS[value] || TILE_COLORS[4096];
           const container = this.add.container(x, y);
-          const bg = this.add.rectangle(0, 0, TILE, TILE, style.bg).setStrokeStyle(2, 0x00000022);
+          const bg = this.add
+            .rectangle(0, 0, TILE, TILE, style.bg)
+            .setStrokeStyle(2, 0x00000022);
           const fontSize = value >= 1024 ? 28 : value >= 128 ? 34 : 40;
-          const label = this.add.text(0, 0, String(value), {
-            fontFamily: 'Arial Black', fontSize: `${fontSize}px`, color: style.text,
-          }).setOrigin(0.5);
+          const label = this.add
+            .text(0, 0, String(value), {
+              fontFamily: 'Arial Black',
+              fontSize: `${fontSize}px`,
+              color: style.text,
+            })
+            .setOrigin(0.5);
           container.add([bg, label]);
           container.setScale(0);
-          this.tweens.add({ targets: container, scale: 1, duration: 160, ease: 'back.out' });
+          this.tweens.add({
+            targets: container,
+            scale: 1,
+            duration: 160,
+            ease: 'back.out',
+          });
           this.grid[r][c] = { value, container };
         }
 
         spawnTile() {
           const empty = [];
           for (let r = 0; r < N; r++)
-            for (let c = 0; c < N; c++) if (!this.grid[r][c]) empty.push([r, c]);
+            for (let c = 0; c < N; c++)
+              if (!this.grid[r][c]) empty.push([r, c]);
           if (!empty.length) return;
           const [r, c] = empty[Math.floor(Math.random() * empty.length)];
           this.makeTile(r, c, Math.random() < 0.9 ? 2 : 4);
@@ -142,8 +182,18 @@ const Game1024 = ({ t }) => {
           for (let r = 0; r < N; r++)
             for (let c = 0; c < N; c++) {
               if (!this.grid[r][c]) return true;
-              if (c + 1 < N && this.grid[r][c + 1] && this.grid[r][c].value === this.grid[r][c + 1].value) return true;
-              if (r + 1 < N && this.grid[r + 1][c] && this.grid[r][c].value === this.grid[r + 1][c].value) return true;
+              if (
+                c + 1 < N &&
+                this.grid[r][c + 1] &&
+                this.grid[r][c].value === this.grid[r][c + 1].value
+              )
+                return true;
+              if (
+                r + 1 < N &&
+                this.grid[r + 1][c] &&
+                this.grid[r][c].value === this.grid[r + 1][c].value
+              )
+                return true;
             }
           return false;
         }
@@ -152,7 +202,8 @@ const Game1024 = ({ t }) => {
           if (this.animating || this.over) return;
           const rotate = { left: 0, up: 3, right: 2, down: 1 }[dir] ?? 0;
           let arr = this.grid.map((row) => row.slice());
-          for (let i = 0; i < rotate; i++) arr = arr[0].map((_, c) => arr.map((row) => row[c]).reverse());
+          for (let i = 0; i < rotate; i++)
+            arr = arr[0].map((_, c) => arr.map((row) => row[c]).reverse());
 
           let moved = false;
           let gained = 0;
@@ -162,11 +213,18 @@ const Game1024 = ({ t }) => {
             const result = [];
             let i = 0;
             while (i < tiles.length) {
-              if (i + 1 < tiles.length && tiles[i].value === tiles[i + 1].value) {
+              if (
+                i + 1 < tiles.length &&
+                tiles[i].value === tiles[i + 1].value
+              ) {
                 const newVal = tiles[i].value * 2;
                 gained += newVal;
                 merges.push({ tile: tiles[i], absorbed: tiles[i + 1], newVal });
-                result.push({ value: newVal, container: tiles[i].container, mergeFrom: tiles[i + 1] });
+                result.push({
+                  value: newVal,
+                  container: tiles[i].container,
+                  mergeFrom: tiles[i + 1],
+                });
                 i += 2;
               } else {
                 result.push(tiles[i]);
@@ -182,11 +240,15 @@ const Game1024 = ({ t }) => {
           moved = false;
           outer: for (let r = 0; r < N; r++)
             for (let c = 0; c < N; c++)
-              if (arr[r][c] !== nextArr[r][c]) { moved = true; break outer; }
+              if (arr[r][c] !== nextArr[r][c]) {
+                moved = true;
+                break outer;
+              }
 
           // 反旋转回原方向
           let out = nextArr;
-          for (let i = 0; i < (4 - rotate) % 4; i++) out = out[0].map((_, c) => out.map((row) => row[c]).reverse());
+          for (let i = 0; i < (4 - rotate) % 4; i++)
+            out = out[0].map((_, c) => out.map((row) => row[c]).reverse());
 
           if (!moved) return;
           this.animating = true;
@@ -200,7 +262,11 @@ const Game1024 = ({ t }) => {
                 if (out[r][c] && out[r][c].container === target.container) {
                   const { x, y } = this.pos(r, c);
                   this.tweens.add({
-                    targets: m.absorbed.container, x, y, duration: 130, ease: 'quad.in',
+                    targets: m.absorbed.container,
+                    x,
+                    y,
+                    duration: 130,
+                    ease: 'quad.in',
                     onComplete: () => m.absorbed.container.destroy(),
                   });
                   break outer;
@@ -213,7 +279,13 @@ const Game1024 = ({ t }) => {
               const cell = out[r][c];
               if (!cell) continue;
               const { x, y } = this.pos(r, c);
-              this.tweens.add({ targets: cell.container, x, y, duration: 130, ease: 'quad.out' });
+              this.tweens.add({
+                targets: cell.container,
+                x,
+                y,
+                duration: 130,
+                ease: 'quad.out',
+              });
               if (cell.mergeFrom) {
                 const newVal = cell.value;
                 this.time.delayedCall(130, () => {
@@ -227,7 +299,11 @@ const Game1024 = ({ t }) => {
                   });
                   label.setText(String(newVal));
                   this.tweens.add({
-                    targets: cell.container, scale: { from: 1, to: 1.18 }, duration: 90, yoyo: true, ease: 'quad.out',
+                    targets: cell.container,
+                    scale: { from: 1, to: 1.18 },
+                    duration: 90,
+                    yoyo: true,
+                    ease: 'quad.out',
                   });
                 });
                 delete cell.mergeFrom;
@@ -252,9 +328,17 @@ const Game1024 = ({ t }) => {
         }
 
         restart() {
+          // 动画期间重开：把挂起的补间与延时回调一起清掉，
+          // 否则旧回调会在新棋盘上再生成一个方块、并按新棋盘误判结束。
+          this.animating = false;
+          this.time.removeAllEvents();
+          this.tweens.killAll();
           for (let r = 0; r < N; r++)
             for (let c = 0; c < N; c++)
-              if (this.grid[r][c]) { this.grid[r][c].container.destroy(); this.grid[r][c] = null; }
+              if (this.grid[r][c]) {
+                this.grid[r][c].container.destroy();
+                this.grid[r][c] = null;
+              }
           this._score = 0;
           this.hooks.onScore(0);
           this.hooks.onOver(false);
@@ -277,21 +361,52 @@ const Game1024 = ({ t }) => {
     <div>
       <div className='flex items-center justify-between mb-2 flex-wrap gap-2'>
         <Space>
-          <Tag color='green'>{t('得分')}: {score}</Tag>
-          <Tag color='violet'>{t('最高')}: {best}</Tag>
+          <Tag color='green'>
+            {t('得分')}: {score}
+          </Tag>
+          <Tag color='violet'>
+            {t('最高')}: {best}
+          </Tag>
         </Space>
-        <Button size='small' theme='solid' type='primary' onClick={() => send('restart')}>
+        <Button
+          size='small'
+          theme='solid'
+          type='primary'
+          onClick={() => send('restart')}
+        >
           {t('重新开始')}
         </Button>
       </div>
-      {loading && <Text type='secondary' className='block text-center'>{t('正在加载游戏引擎…')}</Text>}
-      {error && <Text type='danger' className='block text-center'>{t('游戏引擎加载失败，请刷新重试')}</Text>}
-      <div ref={containerRef} style={{ width: '100%', maxWidth: SIZE, margin: '0 auto' }} />
+      {loading && (
+        <Text type='secondary' className='block text-center'>
+          {t('正在加载游戏引擎…')}
+        </Text>
+      )}
+      {error && (
+        <Text type='danger' className='block text-center'>
+          {t('游戏引擎加载失败，请刷新重试')}
+        </Text>
+      )}
+      <div
+        ref={containerRef}
+        style={{ width: '100%', maxWidth: SIZE, margin: '0 auto' }}
+      />
       <Text type='secondary' className='block mt-2 text-center'>
-        {t('方向键/WASD 或触摸滑动。合并弹跳动画与手感由 Phaser 引擎补间驱动。')}
+        {t(
+          '方向键/WASD 或触摸滑动。合并弹跳动画与手感由 Phaser 引擎补间驱动。',
+        )}
       </Text>
-      {over && <Text type='danger' strong className='block mt-1 text-center'>{t('无法移动，游戏结束！')}</Text>}
-      <RedeemPanel gameKey='g1024' score={score} onRedeemed={settleScore} t={t} />
+      {over && (
+        <Text type='danger' strong className='block mt-1 text-center'>
+          {t('无法移动，游戏结束！')}
+        </Text>
+      )}
+      <RedeemPanel
+        gameKey='g1024'
+        score={score}
+        onRedeemed={settleScore}
+        t={t}
+      />
     </div>
   );
 };

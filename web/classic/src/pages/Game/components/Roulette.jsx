@@ -10,13 +10,16 @@ const { Text } = Typography;
 // - 啤酒： eject 当前一发（喝掉跳过）
 // - 打自己吃空包 = 免费再行动；打对手(AI)造成伤害
 // - 实弹伤害 1，HP 先归零者输
-const Roulette = ({ t }) => {
+const Roulette = ({ t, testMode = false }) => {
   const [chamber, setChamber] = useState([]); // boolean: 实弹 true
   const [known, setKnown] = useState(null); // 放大镜得知的当前发
   const [hp, setHp] = useState(3);
   const [aiHp, setAiHp] = useState(3);
   const [score, setScore] = useState(0);
   const [round, setRound] = useState(1);
+  // 重开时 round 可能本来就是 1，靠它触发 effect 之外的额外一次装填；
+  // 之前直接调 loadRound(1) 再叠加 effect，会把弹巢洗两次并白送道具。
+  const [roundToken, setRoundToken] = useState(0);
   const [lastResult, setLastResult] = useState(null);
   const [turn, setTurn] = useState('player');
   const [magnifiers, setMagnifiers] = useState(2);
@@ -48,7 +51,7 @@ const Roulette = ({ t }) => {
   useEffect(() => {
     loadRound(round);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [round]);
+  }, [round, roundToken]);
 
   const liveCount = chamber.filter(Boolean).length;
   const blankCount = chamber.length - liveCount;
@@ -254,8 +257,17 @@ const Roulette = ({ t }) => {
     setBeers(2);
     setBusy(false);
     setChamber([]);
-    loadRound(1);
+    setRoundToken((n) => n + 1);
   };
+
+  // 测试模式：玩家 5 点生命、AI 1 点，放大镜与啤酒各 9 个
+  useEffect(() => {
+    if (!testMode) return;
+    setHp(5);
+    setAiHp(1);
+    setMagnifiers(9);
+    setBeers(9);
+  }, [testMode]);
 
   const statusText = () => {
     if (gameOver === 'win') return t('🎉 AI 倒下了！你赢了！');

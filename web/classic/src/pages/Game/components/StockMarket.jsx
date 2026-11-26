@@ -1,5 +1,19 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, InputNumber, Select, Space, Table, Tag, Typography } from '@douyinfe/semi-ui';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  Button,
+  InputNumber,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+} from '@douyinfe/semi-ui';
 import { API, showError, showSuccess } from '../../../helpers';
 
 const { Text } = Typography;
@@ -119,6 +133,7 @@ const StockMarket = ({ t }) => {
   const [positions, setPositions] = useState([]);
   const [trades, setTrades] = useState([]);
   const [busy, setBusy] = useState(false);
+  const newsSeqRef = useRef(0);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -128,18 +143,25 @@ const StockMarket = ({ t }) => {
         setRegime(res.data.data.regime);
         setStocks(res.data.data.stocks || []);
         if (!selectedId && res.data.data.stocks?.length) {
-          setSelectedId(res.data.data.stocks[0].id);
+          setSelectedId((cur) => cur ?? res.data.data.stocks[0].id);
         }
       }
     } catch (e) {
       showError(e.message);
     }
-  }, [selectedId]);
+    // 不依赖 selectedId：否则每次切股都会重建这个回调，连带把首屏 effect 再跑一遍，
+    // 与「加载个股新闻」并发，谁后返回谁覆盖，经常显示成大盘新闻。
+  }, []);
 
   const loadNews = useCallback(async (id) => {
+    // 大盘新闻与个股新闻会并发，用序号丢弃过期响应
+    const seq = (newsSeqRef.current += 1);
     try {
-      const url = id ? `/api/user/game/stock/news?stock_id=${id}&limit=50` : '/api/user/game/stock/news?limit=50';
+      const url = id
+        ? `/api/user/game/stock/news?stock_id=${id}&limit=50`
+        : '/api/user/game/stock/news?limit=50';
       const res = await API.get(url);
+      if (seq !== newsSeqRef.current) return;
       if (res.data.success) {
         setNews(res.data.data || []);
       }
@@ -188,8 +210,7 @@ const StockMarket = ({ t }) => {
   useEffect(() => {
     loadOverview();
     loadPositions();
-    loadNews(null);
-  }, [loadOverview, loadPositions, loadNews]);
+  }, [loadOverview, loadPositions]);
 
   useEffect(() => {
     loadKlines(selectedId);
@@ -222,8 +243,14 @@ const StockMarket = ({ t }) => {
       if (res.data.success) {
         showSuccess(
           side === 'buy'
-            ? t('买入成功：{{n}} 股 × ${{p}}', { n: res.data.data.shares, p: res.data.data.price.toFixed(2) })
-            : t('卖出成功：{{n}} 股 × ${{p}}', { n: res.data.data.shares, p: res.data.data.price.toFixed(2) }),
+            ? t('买入成功：{{n}} 股 × ${{p}}', {
+                n: res.data.data.shares,
+                p: res.data.data.price.toFixed(2),
+              })
+            : t('卖出成功：{{n}} 股 × ${{p}}', {
+                n: res.data.data.shares,
+                p: res.data.data.price.toFixed(2),
+              }),
         );
         loadPositions();
         loadOverview();
@@ -244,9 +271,21 @@ const StockMarket = ({ t }) => {
     { title: t('代码'), dataIndex: 'stock_code' },
     { title: t('名称'), dataIndex: 'stock_name' },
     { title: t('持股'), dataIndex: 'shares' },
-    { title: t('成本均价'), dataIndex: 'cost_avg', render: (v) => `$${v.toFixed(2)}` },
-    { title: t('现价'), dataIndex: 'last_price', render: (v) => `$${v.toFixed(2)}` },
-    { title: t('市值'), dataIndex: 'market_value', render: (v) => `$${v.toFixed(2)}` },
+    {
+      title: t('成本均价'),
+      dataIndex: 'cost_avg',
+      render: (v) => `$${v.toFixed(2)}`,
+    },
+    {
+      title: t('现价'),
+      dataIndex: 'last_price',
+      render: (v) => `$${v.toFixed(2)}`,
+    },
+    {
+      title: t('市值'),
+      dataIndex: 'market_value',
+      render: (v) => `$${v.toFixed(2)}`,
+    },
     {
       title: t('浮动盈亏'),
       dataIndex: 'pnl',
@@ -263,20 +302,37 @@ const StockMarket = ({ t }) => {
       <div className='flex items-center justify-between mb-3 flex-wrap gap-2'>
         <Space>
           <Tag color={phaseInfo.color}>{t(phaseInfo.text)}</Tag>
-          <Tag color={regimeInfo.color} type='solid'>{t(regimeInfo.text)}</Tag>
+          <Tag color={regimeInfo.color} type='solid'>
+            {t(regimeInfo.text)}
+          </Tag>
           <Text type='secondary' size='small'>
             {t('交易时间：工作日 9:30-11:30 / 13:00-15:00，涨跌幅 ±10%')}
           </Text>
         </Space>
-        <Button size='small' onClick={() => { loadOverview(); loadKlines(selectedId); loadPositions(); loadNews(selectedId); loadOrderBook(selectedId); }}>
+        <Button
+          size='small'
+          onClick={() => {
+            loadOverview();
+            loadKlines(selectedId);
+            loadPositions();
+            loadNews(selectedId);
+            loadOrderBook(selectedId);
+          }}
+        >
           {t('刷新')}
         </Button>
       </div>
 
       {/* 股票列表 */}
-      <div className='grid gap-2 mb-3' style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+      <div
+        className='grid gap-2 mb-3'
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}
+      >
         {stocks.map((s) => {
-          const pct = s.prev_close > 0 ? ((s.last_price - s.prev_close) / s.prev_close) * 100 : 0;
+          const pct =
+            s.prev_close > 0
+              ? ((s.last_price - s.prev_close) / s.prev_close) * 100
+              : 0;
           return (
             <div
               key={s.id}
@@ -284,19 +340,36 @@ const StockMarket = ({ t }) => {
               className='rounded-lg p-2 cursor-pointer'
               style={{
                 border: `2px solid ${selectedId === s.id ? 'var(--semi-color-primary)' : 'var(--semi-color-border)'}`,
-                background: selectedId === s.id ? 'var(--semi-color-primary-light-default)' : 'transparent',
+                background:
+                  selectedId === s.id
+                    ? 'var(--semi-color-primary-light-default)'
+                    : 'transparent',
                 opacity: s.delisted ? 0.5 : 1,
               }}
             >
               <Text strong>{s.code}</Text>
-              {s.delisted && <Tag color='red' size='small'>{t('退市')}</Tag>}
-              {!s.delisted && s.halted && <Tag color='grey' size='small'>{t('停牌')}</Tag>}
-              <Text type='secondary' className='block' size='small'>{s.name}</Text>
+              {s.delisted && (
+                <Tag color='red' size='small'>
+                  {t('退市')}
+                </Tag>
+              )}
+              {!s.delisted && s.halted && (
+                <Tag color='grey' size='small'>
+                  {t('停牌')}
+                </Tag>
+              )}
+              <Text type='secondary' className='block' size='small'>
+                {s.name}
+              </Text>
               <Text strong style={{ color: pct >= 0 ? '#ef4444' : '#22c55e' }}>
                 ${s.last_price.toFixed(2)}
               </Text>
-              <Text size='small' style={{ color: pct >= 0 ? '#ef4444' : '#22c55e' }}>
-                {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+              <Text
+                size='small'
+                style={{ color: pct >= 0 ? '#ef4444' : '#22c55e' }}
+              >
+                {pct >= 0 ? '+' : ''}
+                {pct.toFixed(2)}%
               </Text>
             </div>
           );
@@ -304,21 +377,53 @@ const StockMarket = ({ t }) => {
       </div>
 
       {/* K线 + 盘口并排 */}
-      <div className='grid gap-3' style={{ gridTemplateColumns: 'minmax(0, 1.6fr) minmax(200px, 1fr)' }}>
+      <div
+        className='grid gap-3'
+        style={{ gridTemplateColumns: 'minmax(0, 1.6fr) minmax(200px, 1fr)' }}
+      >
         <KlineChart klines={klines} />
 
         {/* 五档盘口 */}
-        <div className='rounded-lg p-2' style={{ background: 'var(--semi-color-fill-0)' }}>
-          <Text strong className='block mb-1'>{t('五档盘口')}</Text>
+        <div
+          className='rounded-lg p-2'
+          style={{ background: 'var(--semi-color-fill-0)' }}
+        >
+          <Text strong className='block mb-1'>
+            {t('五档盘口')}
+          </Text>
           {orderBook.map((row, i) => (
             <div key={i} className='flex justify-between text-xs leading-6'>
-              <span style={{ color: row.side === 'ask' ? '#ef4444' : row.side === 'bid' ? '#22c55e' : 'var(--semi-color-text)' }}>
-                {row.side === 'ask' ? t('卖') + row.level : row.side === 'bid' ? t('买') + row.level : t('最新')}
+              <span
+                style={{
+                  color:
+                    row.side === 'ask'
+                      ? '#ef4444'
+                      : row.side === 'bid'
+                        ? '#22c55e'
+                        : 'var(--semi-color-text)',
+                }}
+              >
+                {row.side === 'ask'
+                  ? t('卖') + row.level
+                  : row.side === 'bid'
+                    ? t('买') + row.level
+                    : t('最新')}
               </span>
-              <span style={{ color: row.side === 'ask' ? '#ef4444' : row.side === 'bid' ? '#22c55e' : 'var(--semi-color-text)' }}>
+              <span
+                style={{
+                  color:
+                    row.side === 'ask'
+                      ? '#ef4444'
+                      : row.side === 'bid'
+                        ? '#22c55e'
+                        : 'var(--semi-color-text)',
+                }}
+              >
                 ${Number(row.price).toFixed(2)}
               </span>
-              <span style={{ color: 'var(--semi-color-text-2)' }}>{row.volume || ''}</span>
+              <span style={{ color: 'var(--semi-color-text-2)' }}>
+                {row.volume || ''}
+              </span>
             </div>
           ))}
         </div>
@@ -326,22 +431,47 @@ const StockMarket = ({ t }) => {
 
       {/* 新闻事件流 */}
       <div className='mt-4'>
-        <Text strong className='block mb-2'>{t('📰 市场快讯')}</Text>
-        <div className='rounded-lg p-3 max-h-56 overflow-y-auto' style={{ background: 'var(--semi-color-fill-0)' }}>
-          {news.length === 0 && <Text type='secondary'>{t('暂无快讯，开盘后事件将实时推送')}</Text>}
+        <Text strong className='block mb-2'>
+          {t('📰 市场快讯')}
+        </Text>
+        <div
+          className='rounded-lg p-3 max-h-56 overflow-y-auto'
+          style={{ background: 'var(--semi-color-fill-0)' }}
+        >
+          {news.length === 0 && (
+            <Text type='secondary'>{t('暂无快讯，开盘后事件将实时推送')}</Text>
+          )}
           {news.map((e) => (
-            <div key={e.id} className='mb-2 pb-2' style={{ borderBottom: '1px solid var(--semi-color-border)' }}>
+            <div
+              key={e.id}
+              className='mb-2 pb-2'
+              style={{ borderBottom: '1px solid var(--semi-color-border)' }}
+            >
               <div className='flex items-center gap-2 flex-wrap'>
-                <Tag size='small' color={IMPACT_COLORS[e.category] || 'grey'}>{t(e.title.split(' ')[0] === '央行' || e.stock_code === 'MARKET' ? '宏观' : e.category)}</Tag>
-                <Text strong size='small'>{e.title}</Text>
+                <Tag size='small' color={IMPACT_COLORS[e.category] || 'grey'}>
+                  {t(
+                    e.title.split(' ')[0] === '央行' ||
+                      e.stock_code === 'MARKET'
+                      ? '宏观'
+                      : e.category,
+                  )}
+                </Tag>
+                <Text strong size='small'>
+                  {e.title}
+                </Text>
                 {e.impact_pct !== 0 && (
-                  <Text size='small' type={e.impact_pct > 0 ? 'success' : 'danger'}>
-                    {e.impact_pct > 0 ? '+' : ''}{e.impact_pct.toFixed(1)}%
+                  <Text
+                    size='small'
+                    type={e.impact_pct > 0 ? 'success' : 'danger'}
+                  >
+                    {e.impact_pct > 0 ? '+' : ''}
+                    {e.impact_pct.toFixed(1)}%
                   </Text>
                 )}
               </div>
               <Text type='secondary' size='small' className='block'>
-                {e.body}{e.expectation ? ` · ${e.expectation}` : ''}
+                {e.body}
+                {e.expectation ? ` · ${e.expectation}` : ''}
               </Text>
             </div>
           ))}
@@ -355,7 +485,9 @@ const StockMarket = ({ t }) => {
       >
         <Space>
           <Text strong>
-            {selectedStock ? `${selectedStock.code} · ${selectedStock.name} · $${selectedStock.last_price.toFixed(2)}` : ''}
+            {selectedStock
+              ? `${selectedStock.code} · ${selectedStock.name} · $${selectedStock.last_price.toFixed(2)}`
+              : ''}
           </Text>
           {selectedStock?.delisted && <Tag color='red'>{t('已退市')}</Tag>}
           {selectedStock?.halted && <Tag color='grey'>{t('停牌中')}</Tag>}
@@ -372,7 +504,11 @@ const StockMarket = ({ t }) => {
             theme='solid'
             type='danger'
             loading={busy}
-            disabled={phase !== 'open' || selectedStock?.halted || selectedStock?.delisted}
+            disabled={
+              phase !== 'open' ||
+              selectedStock?.halted ||
+              selectedStock?.delisted
+            }
             onClick={() => trade('buy')}
           >
             {t('买入')}
@@ -381,7 +517,11 @@ const StockMarket = ({ t }) => {
             theme='solid'
             type='success'
             loading={busy}
-            disabled={phase !== 'open' || selectedStock?.halted || selectedStock?.delisted}
+            disabled={
+              phase !== 'open' ||
+              selectedStock?.halted ||
+              selectedStock?.delisted
+            }
             onClick={() => trade('sell')}
           >
             {t('卖出')}
@@ -391,7 +531,9 @@ const StockMarket = ({ t }) => {
 
       {/* 持仓 */}
       <div className='mt-4'>
-        <Text strong className='block mb-2'>{t('我的持仓')}</Text>
+        <Text strong className='block mb-2'>
+          {t('我的持仓')}
+        </Text>
         <Table
           columns={posColumns}
           dataSource={positions}
@@ -403,12 +545,26 @@ const StockMarket = ({ t }) => {
 
       {/* 成交记录 */}
       <div className='mt-4'>
-        <Text strong className='block mb-2'>{t('成交记录')}</Text>
+        <Text strong className='block mb-2'>
+          {t('成交记录')}
+        </Text>
         <Table
           columns={[
             { title: t('代码'), dataIndex: 'stock_code' },
-            { title: t('方向'), dataIndex: 'side', render: (v) => <Tag color={v === 'buy' ? 'red' : 'green'}>{v === 'buy' ? t('买入') : t('卖出')}</Tag> },
-            { title: t('价格'), dataIndex: 'price', render: (v) => `$${v.toFixed(2)}` },
+            {
+              title: t('方向'),
+              dataIndex: 'side',
+              render: (v) => (
+                <Tag color={v === 'buy' ? 'red' : 'green'}>
+                  {v === 'buy' ? t('买入') : t('卖出')}
+                </Tag>
+              ),
+            },
+            {
+              title: t('价格'),
+              dataIndex: 'price',
+              render: (v) => `$${v.toFixed(2)}`,
+            },
             { title: t('股数'), dataIndex: 'shares' },
           ]}
           dataSource={trades.slice(0, 10)}

@@ -18,10 +18,32 @@ const ITEM_TYPES = [
   { key: 'small', r: 11, value: 50, weight: 1, color: 0xfbbf24, label: '小金' },
   { key: 'mid', r: 16, value: 150, weight: 2, color: 0xf59e0b, label: '中金' },
   { key: 'big', r: 24, value: 500, weight: 4, color: 0xd97706, label: '大金' },
-  { key: 'diamond', r: 9, value: 600, weight: 1, color: 0x22d3ee, label: '钻石' },
+  {
+    key: 'diamond',
+    r: 9,
+    value: 600,
+    weight: 1,
+    color: 0x22d3ee,
+    label: '钻石',
+  },
   { key: 'rock', r: 20, value: 11, weight: 6, color: 0x6b7280, label: '石头' },
-  { key: 'bomb', r: 12, value: -100, weight: 1, color: 0xef4444, label: '炸药' },
-  { key: 'bag', r: 13, value: 0, weight: 2, color: 0x92400e, label: '幸运袋', mystery: true },
+  {
+    key: 'bomb',
+    r: 12,
+    value: -100,
+    weight: 1,
+    color: 0xef4444,
+    label: '炸药',
+  },
+  {
+    key: 'bag',
+    r: 13,
+    value: 0,
+    weight: 2,
+    color: 0x92400e,
+    label: '幸运袋',
+    mystery: true,
+  },
 ];
 
 // Phaser 引擎版黄金矿工：角速度摆锤物理、绳索绘制、按重量的收线速度、关卡目标
@@ -36,7 +58,10 @@ const GoldMiner = ({ t }) => {
     // 引擎上报的是本局累计总分，扣除已兑换部分后再显示，避免重复兑换
     onScore: (s) => syncScore(s),
     onTime: (s) => setTimeLeft(s),
-    onLevel: (l, tg) => { setLevel(l); setTarget(tg); },
+    onLevel: (l, tg) => {
+      setLevel(l);
+      setTarget(tg);
+    },
     onStatus: (s) => setStatus(s),
     getCommand: () => {
       const c = cmdRef.current.cmd;
@@ -45,7 +70,9 @@ const GoldMiner = ({ t }) => {
     },
   });
 
-  const send = useCallback((cmd) => { cmdRef.current.cmd = cmd; }, []);
+  const send = useCallback((cmd) => {
+    cmdRef.current.cmd = cmd;
+  }, []);
 
   const { containerRef, error, loading } = usePhaserGame({
     width: W,
@@ -53,7 +80,9 @@ const GoldMiner = ({ t }) => {
     backgroundColor: '#1e293b',
     sceneFactory: (Phaser) => {
       class MinerScene extends Phaser.Scene {
-        constructor() { super('miner'); }
+        constructor() {
+          super('miner');
+        }
 
         create() {
           this.hooks = hooks.current;
@@ -63,11 +92,15 @@ const GoldMiner = ({ t }) => {
 
           // 天空与地面
           this.add.rectangle(0, 0, W, GROUND_Y, 0x7dd3fc, 1).setOrigin(0);
-          this.add.rectangle(0, GROUND_Y, W, H - GROUND_Y, 0x78350f, 1).setOrigin(0);
+          this.add
+            .rectangle(0, GROUND_Y, W, H - GROUND_Y, 0x78350f, 1)
+            .setOrigin(0);
           // 地面草线
           this.add.rectangle(0, GROUND_Y - 6, W, 10, 0x4d7c0f, 1).setOrigin(0);
           // 矿工
-          this.miner = this.add.text(HOOK_X - 16, HOOK_Y - 42, '⛏️', { fontSize: '30px' });
+          this.miner = this.add.text(HOOK_X - 16, HOOK_Y - 42, '⛏️', {
+            fontSize: '30px',
+          });
 
           // 绳（graphic 每帧重绘）
           this.rope = this.add.graphics();
@@ -93,23 +126,37 @@ const GoldMiner = ({ t }) => {
           this.items = [];
           const count = 8 + this.level;
           for (let i = 0; i < count; i++) {
-            const type = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
+            const type =
+              ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
             let x, y, ok;
             do {
               x = 30 + Math.random() * (W - 60);
               y = GROUND_Y + 25 + Math.random() * (H - GROUND_Y - 45);
-              ok = this.items.every((it) => Phaser.Math.Distance.Between(x, y, it.x, it.y) > 46);
+              ok = this.items.every(
+                (it) => Phaser.Math.Distance.Between(x, y, it.x, it.y) > 46,
+              );
             } while (!ok);
             const obj = this.add.circle(x, y, type.r, type.color);
             obj.setStrokeStyle(2, 0x00000044);
             if (type.key === 'diamond') {
-              this.tweens.add({ targets: obj, scaleX: 1.2, scaleY: 1.2, duration: 500, yoyo: true, repeat: -1 });
+              this.tweens.add({
+                targets: obj,
+                scaleX: 1.2,
+                scaleY: 1.2,
+                duration: 500,
+                yoyo: true,
+                repeat: -1,
+              });
             }
             this.items.push({ ...type, x, y, obj, taken: false });
           }
         }
 
         startLevel(level) {
+          // 运行中点「重新开始」会再次进入这里：先清掉上一关的倒计时，
+          // 否则旧 timer 不会被 this.timeEvent 引用到，时间会双倍消耗且 endLevel 反复触发。
+          this.timeEvent?.remove();
+          this.timeEvent = null;
           this.level = level;
           this._score = level === 1 ? 0 : this._score;
           const target = 650 + (level - 1) * 400;
@@ -123,11 +170,15 @@ const GoldMiner = ({ t }) => {
           this.caught = null;
           this.ropeLen = SWING_ROPE_LEN;
           this.hooks.onStatus('running');
-          this.timeEvent = this.time.addEvent({ delay: 1000, repeat: 59, callback: () => {
-            this.timeLeft -= 1;
-            this.hooks.onTime(this.timeLeft);
-            if (this.timeLeft <= 0) this.endLevel();
-          } });
+          this.timeEvent = this.time.addEvent({
+            delay: 1000,
+            repeat: 59,
+            callback: () => {
+              this.timeLeft -= 1;
+              this.hooks.onTime(this.timeLeft);
+              if (this.timeLeft <= 0) this.endLevel();
+            },
+          });
         }
 
         endLevel() {
@@ -173,19 +224,38 @@ const GoldMiner = ({ t }) => {
           } else if (this.mode === 'down') {
             this.ropeLen += 260 * dt;
           } else if (this.mode === 'up') {
-            const speed = this.caught ? Math.max(70, 300 - this.caught.weight * 34) : 300;
+            const speed = this.caught
+              ? Math.max(70, 300 - this.caught.weight * 34)
+              : 300;
             this.ropeLen -= speed * dt;
             if (this.ropeLen <= SWING_ROPE_LEN) {
               if (this.caught) {
                 let value = this.caught.value;
-                if (this.caught.mystery) value = [ -50, 150, 350, 888 ][Math.floor(Math.random() * 4)];
+                if (this.caught.mystery)
+                  value = [-50, 150, 350, 888][Math.floor(Math.random() * 4)];
                 this._score = Math.max(0, this._score + value);
                 this.hooks.onScore(this._score);
                 // 收获特效
-                const floatText = this.add.text(HOOK_X, HOOK_Y - 30, `${value >= 0 ? '+' : ''}${value}`, {
-                  fontFamily: 'Arial', fontSize: '20px', color: value >= 0 ? '#4ade80' : '#f87171', fontStyle: 'bold',
-                }).setOrigin(0.5);
-                this.tweens.add({ targets: floatText, y: floatText.y - 36, alpha: 0, duration: 800, onComplete: () => floatText.destroy() });
+                const floatText = this.add
+                  .text(
+                    HOOK_X,
+                    HOOK_Y - 30,
+                    `${value >= 0 ? '+' : ''}${value}`,
+                    {
+                      fontFamily: 'Arial',
+                      fontSize: '20px',
+                      color: value >= 0 ? '#4ade80' : '#f87171',
+                      fontStyle: 'bold',
+                    },
+                  )
+                  .setOrigin(0.5);
+                this.tweens.add({
+                  targets: floatText,
+                  y: floatText.y - 36,
+                  alpha: 0,
+                  duration: 800,
+                  onComplete: () => floatText.destroy(),
+                });
                 this.caught.obj.destroy();
                 this.caught = null;
               }
@@ -199,7 +269,12 @@ const GoldMiner = ({ t }) => {
           if (this.mode === 'down') {
             for (const item of this.items) {
               if (item.taken) continue;
-              const dist = Phaser.Math.Distance.Between(tip.x, tip.y, item.x, item.y);
+              const dist = Phaser.Math.Distance.Between(
+                tip.x,
+                tip.y,
+                item.x,
+                item.y,
+              );
               if (dist < item.r + 8) {
                 item.taken = true;
                 this.caught = item;
@@ -234,33 +309,73 @@ const GoldMiner = ({ t }) => {
     <div>
       <div className='flex items-center justify-between mb-2 flex-wrap gap-2'>
         <Space>
-          <Tag color='green'>{t('得分')}: {score}</Tag>
-          <Tag color='blue'>{t('时间')}: {timeLeft}s</Tag>
-          <Tag color='violet'>{t('第 {{n}} 关', { n: level })} · {t('目标')} {target}</Tag>
+          <Tag color='green'>
+            {t('得分')}: {score}
+          </Tag>
+          <Tag color='blue'>
+            {t('时间')}: {timeLeft}s
+          </Tag>
+          <Tag color='violet'>
+            {t('第 {{n}} 关', { n: level })} · {t('目标')} {target}
+          </Tag>
         </Space>
         <Space>
           {status === 'win' && (
-            <Button size='small' theme='solid' type='primary' onClick={() => send('next')}>
+            <Button
+              size='small'
+              theme='solid'
+              type='primary'
+              onClick={() => send('next')}
+            >
               {t('下一关')}
             </Button>
           )}
-          <Button size='small' theme='solid' type='warning' onClick={() => send('start')}>
+          <Button
+            size='small'
+            theme='solid'
+            type='warning'
+            onClick={() => send('start')}
+          >
             {status === 'idle' ? t('开始游戏') : t('重新开始')}
           </Button>
         </Space>
       </div>
-      {loading && <Text type='secondary' className='block text-center'>{t('正在加载游戏引擎…')}</Text>}
-      {error && <Text type='danger' className='block text-center'>{t('游戏引擎加载失败，请刷新重试')}</Text>}
-      <div ref={containerRef} style={{ width: '100%', maxWidth: W, margin: '0 auto' }} />
-      <Text type='secondary' className='block mt-2 text-center'>
-        {t('点击放钩。钟摆物理摆动，重物收线慢。小金50/中金150/大金500/钻石600/石头11/炸药-100/幸运袋随机。60秒内达标过关，关卡目标递增。')}
-      </Text>
-      {(status === 'over' || status === 'win') && (
-        <Text strong type={status === 'win' ? 'success' : 'danger'} className='block mt-1 text-center'>
-          {status === 'win' ? t('🎉 达标！可进入下一关') : t('未达标，游戏结束')}
+      {loading && (
+        <Text type='secondary' className='block text-center'>
+          {t('正在加载游戏引擎…')}
         </Text>
       )}
-      <RedeemPanel gameKey='goldminer' score={score} onRedeemed={settleScore} t={t} />
+      {error && (
+        <Text type='danger' className='block text-center'>
+          {t('游戏引擎加载失败，请刷新重试')}
+        </Text>
+      )}
+      <div
+        ref={containerRef}
+        style={{ width: '100%', maxWidth: W, margin: '0 auto' }}
+      />
+      <Text type='secondary' className='block mt-2 text-center'>
+        {t(
+          '点击放钩。钟摆物理摆动，重物收线慢。小金50/中金150/大金500/钻石600/石头11/炸药-100/幸运袋随机。60秒内达标过关，关卡目标递增。',
+        )}
+      </Text>
+      {(status === 'over' || status === 'win') && (
+        <Text
+          strong
+          type={status === 'win' ? 'success' : 'danger'}
+          className='block mt-1 text-center'
+        >
+          {status === 'win'
+            ? t('🎉 达标！可进入下一关')
+            : t('未达标，游戏结束')}
+        </Text>
+      )}
+      <RedeemPanel
+        gameKey='goldminer'
+        score={score}
+        onRedeemed={settleScore}
+        t={t}
+      />
     </div>
   );
 };
