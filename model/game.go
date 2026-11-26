@@ -13,6 +13,9 @@ import (
 const (
 	GameStatusAvailable  = "available"
 	GameStatusUnreleased = "unreleased"
+	// GameStatusHidden 表示该游戏对普通用户完全不可见（列表里不出现、直达链接回大厅），
+	// 只有超级管理员仍能在管理模式下看到并恢复。
+	GameStatusHidden = "hidden"
 
 	GameScoreLogTypeRedeem = "redeem"
 )
@@ -114,6 +117,21 @@ func SetGamePageTitle(title string) error {
 	return DB.Save(&Option{Key: "game_page_title", Value: title}).Error
 }
 
+// IsValidGameStatus 校验状态取值，避免脏值写库。
+func IsValidGameStatus(status string) bool {
+	switch status {
+	case GameStatusAvailable, GameStatusUnreleased, GameStatusHidden:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsGameHidden 该状态是否对普通用户完全隐藏。
+func IsGameHidden(status string) bool {
+	return status == GameStatusHidden
+}
+
 func ListGameConfigs() ([]*GameConfig, error) {
 	games := make([]*GameConfig, 0)
 	if err := DB.Order("sort_order asc").Find(&games).Error; err != nil {
@@ -126,13 +144,33 @@ func ListGameConfigs() ([]*GameConfig, error) {
 	return games, nil
 }
 
+// ListVisibleGameConfigs 返回对当前用户可见的游戏。
+// includeHidden 为 true（管理员）时包含已隐藏的游戏，否则过滤掉。
+func ListVisibleGameConfigs(includeHidden bool) ([]*GameConfig, error) {
+	games, err := ListGameConfigs()
+	if err != nil {
+		return nil, err
+	}
+	if includeHidden {
+		return games, nil
+	}
+	visible := make([]*GameConfig, 0, len(games))
+	for _, game := range games {
+		if IsGameHidden(game.Status) {
+			continue
+		}
+		visible = append(visible, game)
+	}
+	return visible, nil
+}
+
 func UpdateGameConfigs(updates []GameConfig) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		for _, update := range updates {
 			if update.GameKey == "" {
 				continue
 			}
-			if update.Status != GameStatusAvailable && update.Status != GameStatusUnreleased {
+			if !IsValidGameStatus(update.Status) {
 				return fmt.Errorf("invalid status for game %s", update.GameKey)
 			}
 			if err := tx.Model(&GameConfig{}).

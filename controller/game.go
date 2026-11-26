@@ -12,7 +12,9 @@ import (
 // ---------- 游戏配置 ----------
 
 func ListGames(c *gin.Context) {
-	games, err := model.ListGameConfigs()
+	// 已隐藏的游戏只对超级管理员返回：普通用户连名字都拿不到，
+	// 管理模式下才有数据可以恢复。
+	games, err := model.ListVisibleGameConfigs(c.GetInt("role") >= common.RoleRootUser)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -21,7 +23,7 @@ func ListGames(c *gin.Context) {
 }
 
 type updateGamesRequest struct {
-	Title string         `json:"title"`
+	Title string             `json:"title"`
 	Games []model.GameConfig `json:"games"`
 }
 
@@ -111,7 +113,7 @@ func GetStockOverview(c *gin.Context) {
 			"prev_close": s.PrevClose, "last_price": s.LastPrice,
 			"open_price": s.OpenPrice, "high_price": s.HighPrice, "low_price": s.LowPrice,
 			"listing_price": s.ListingPrice,
-			"halted":       s.HaltedUntil > nowTs, "halt_remaining": maxInt64(0, s.HaltedUntil-nowTs),
+			"halted":        s.HaltedUntil > nowTs, "halt_remaining": maxInt64(0, s.HaltedUntil-nowTs),
 			"delisted": s.Delisted,
 		})
 	}
@@ -154,9 +156,9 @@ func GetStockOrderBook(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, gin.H{
-		"book":  model.BuildOrderBook(stock),
-		"last":  stock.LastPrice,
-		"halted": stock.HaltedUntil > time.Now().Unix(),
+		"book":     model.BuildOrderBook(stock),
+		"last":     stock.LastPrice,
+		"halted":   stock.HaltedUntil > time.Now().Unix(),
 		"delisted": stock.Delisted,
 	})
 }

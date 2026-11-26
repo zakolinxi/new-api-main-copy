@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import { useMemo } from 'react';
+import { isRoot } from '../../helpers/utils';
 
 export const useNavigation = (t, docsLink, headerNavModules) => {
   const mainNavLinks = useMemo(() => {
@@ -108,7 +109,8 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         return modules.rankings !== false;
       }
       if (link.itemKey === 'game') {
-        return modules.game !== false;
+        // 对用户隐藏后入口消失；root 保留入口，否则没人能回去恢复
+        return modules.game !== false || isRoot();
       }
       return modules[link.itemKey] === true;
     });

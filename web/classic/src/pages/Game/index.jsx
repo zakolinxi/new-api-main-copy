@@ -22,6 +22,7 @@ import {
   Button,
   Card,
   Input,
+  Modal,
   Select,
   Space,
   Spin,
@@ -30,7 +31,7 @@ import {
 } from '@douyinfe/semi-ui';
 import { IconRefresh, IconSave, IconUndo } from '@douyinfe/semi-icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import {
   Blocks,
   ChartCandlestick,
@@ -48,6 +49,7 @@ import {
 import { API, showError, showSuccess } from '../../helpers';
 import { isRoot } from '../../helpers/utils';
 import GameHelpButton from './components/GameHelpButton';
+import useGameVisibility from './components/useGameVisibility';
 import './game-paper.css';
 
 const { Text, Title } = Typography;
@@ -81,6 +83,13 @@ const Game = () => {
   const [draftTitle, setDraftTitle] = useState('');
   const [draftStatuses, setDraftStatuses] = useState({});
   const [saving, setSaving] = useState(false);
+  // 全局可见性：复用顶栏模块配置的 game 开关，隐藏后入口消失、直达链接也回首页
+  const {
+    hidden: gameHidden,
+    setHidden: setGameHidden,
+    saving: togglingVisibility,
+  } = useGameVisibility();
+  const canAdmin = isRoot();
 
   const loadGames = useCallback(async () => {
     setLoading(true);
@@ -103,11 +112,19 @@ const Game = () => {
   }, []);
 
   useEffect(() => {
+    // 已对用户隐藏且当前用户不是 root：不请求列表，直接由下方重定向回首页
+    if (gameHidden && !canAdmin) return;
     loadGames();
-  }, [loadGames]);
+  }, [loadGames, gameHidden, canAdmin]);
 
-  const canAdmin = isRoot();
-  const availableCount = games.filter(
+  // 已隐藏的游戏不进普通列表（后端对普通用户已过滤，这里兜底）；
+  // 管理模式保留全部，才能改回来。
+  const visibleGames = useMemo(
+    () =>
+      adminMode ? games : games.filter((game) => game.status !== 'hidden'),
+    [games, adminMode],
+  );
+  const availableCount = visibleGames.filter(
     (game) => game.status === 'available',
   ).length;
 
@@ -155,6 +172,27 @@ const Game = () => {
     );
   };
 
+  // 隐藏：二次确认；恢复：直接生效（不打扰）
+  const handleToggleVisibility = () => {
+    if (gameHidden) {
+      setGameHidden(false);
+      return;
+    }
+    Modal.confirm({
+      title: t('隐藏游戏模块'),
+      content: t(
+        '隐藏后顶栏「游戏」入口对所有普通用户消失，直接访问游戏页会回到首页。你可以在本页随时恢复。确定隐藏吗？',
+      ),
+      okText: t('隐藏'),
+      cancelText: t('取消'),
+      onOk: () => setGameHidden(true),
+    });
+  };
+
+  // 已对用户隐藏：非 root 即使手输 URL 也回首页；root 保留通道，否则自己也无法恢复
+  if (gameHidden && !canAdmin) {
+    return <Navigate to='/' replace />;
+  }
   return (
     <div className='game-paper-page game-lobby relative mt-[60px]'>
       {adminMode && hasUnsavedChanges && (
@@ -211,7 +249,7 @@ const Game = () => {
             <div className='game-summary' aria-label={t('游戏概览')}>
               <div className='game-summary__item'>
                 <span>{t('收录')}</span>
-                <strong>{String(games.length).padStart(2, '0')}</strong>
+                <strong>{String(visibleGames.length).padStart(2, '0')}</strong>
               </div>
               <div className='game-summary__item'>
                 <span>{t('上线')}</span>
@@ -219,6 +257,11 @@ const Game = () => {
               </div>
             </div>
             <Space className='game-toolbar'>
+              {gameHidden && !adminMode && (
+                <Tag color='red' shape='circle'>
+                  {t('游戏已对用户隐藏')}
+                </Tag>
+              )}
               {canAdmin && (
                 <Button
                   theme={adminMode ? 'solid' : 'light'}
@@ -239,11 +282,47 @@ const Game = () => {
           </div>
         </section>
 
+        {adminMode && (
+          <div
+            className='mb-4 rounded-xl px-4 py-3 flex items-center justify-between gap-4 flex-wrap'
+            style={{
+              background: 'var(--semi-color-fill-0)',
+              border: '1px solid var(--semi-color-border)',
+            }}
+          >
+            <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+              <Text strong>{t('对用户隐藏游戏模块')}</Text>
+              <Text
+                type='secondary'
+                size='small'
+                style={{ display: 'block', marginTop: 2 }}
+              >
+                {t(
+                  '隐藏后顶栏「游戏」入口对所有普通用户消失，直接访问游戏页会回到首页；管理员仍可进入本页恢复。',
+                )}
+              </Text>
+            </div>
+            <Space>
+              <Tag color={gameHidden ? 'red' : 'green'} shape='circle'>
+                {gameHidden ? t('已隐藏') : t('对用户可见')}
+              </Tag>
+              <Button
+                theme='solid'
+                type={gameHidden ? 'primary' : 'danger'}
+                loading={togglingVisibility}
+                onClick={handleToggleVisibility}
+              >
+                {gameHidden ? t('恢复显示') : t('隐藏游戏')}
+              </Button>
+            </Space>
+          </div>
+        )}
+
         <div className='game-section-heading'>
           <Text className='game-eyebrow'>{t('可用游戏')}</Text>
           <span />
           <Text type='tertiary' className='game-section-heading__count'>
-            {availableCount} / {games.length}
+            {availableCount} / {visibleGames.length}
           </Text>
         </div>
 
@@ -253,20 +332,21 @@ const Game = () => {
           </div>
         ) : (
           <div className='game-paper-grid'>
-            {games.map((game, index) => {
+            {visibleGames.map((game, index) => {
               const isAvailable = adminMode
                 ? true
                 : game.status === 'available';
+              const isHidden = game.status === 'hidden';
               const GameIcon = GAME_ICONS[game.game_key] || Gamepad2;
               return (
                 <Card
                   key={game.game_key}
                   className={`game-paper-card game-paper-card--tilt-${(index % 3) + 1}`}
-                  style={{ opacity: isAvailable ? 1 : 0.58 }}
+                  style={{ opacity: isHidden ? 0.5 : isAvailable ? 1 : 0.58 }}
                 >
                   <div className='game-card__folio flex items-center justify-between'>
                     <Text type='tertiary' size='small' className='game-mono'>
-                      NO. {String(game.sort_order).padStart(2, '0')}
+                      NO. {String(index + 1).padStart(2, '0')}
                     </Text>
                     {adminMode ? (
                       <Select
@@ -281,6 +361,7 @@ const Game = () => {
                         optionList={[
                           { value: 'available', label: t('已上线') },
                           { value: 'unreleased', label: t('未上线') },
+                          { value: 'hidden', label: t('已隐藏') },
                         ]}
                         style={{ width: 100 }}
                       />

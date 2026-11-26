@@ -113,3 +113,66 @@ func TestRedeemRejectsGameWithoutScoreCap(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, userQuota)
 }
+
+func TestHiddenGameCanBeToggledButNotRedeemed(t *testing.T) {
+	truncateTables(t)
+	require.NoError(t, DB.AutoMigrate(&GameConfig{}, &GameScoreLog{}))
+	t.Cleanup(func() {
+		DB.Exec("DELETE FROM game_score_logs")
+		DB.Exec("DELETE FROM game_configs")
+	})
+
+	require.NoError(t, DB.Create(&GameConfig{
+		GameKey: "snake", Name: "贪吃蛇", Status: GameStatusAvailable, MaxScore: 100000, SortOrder: 1,
+	}).Error)
+
+	// hidden 是合法状态，能写进库
+	require.NoError(t, UpdateGameConfigs([]GameConfig{{
+		GameKey: "snake", Name: "贪吃蛇", Status: GameStatusHidden, SortOrder: 1,
+	}}))
+	game, err := GetGameConfigByKey("snake")
+	require.NoError(t, err)
+	assert.Equal(t, GameStatusHidden, game.Status)
+	assert.True(t, IsGameHidden(game.Status))
+
+	// 非法状态仍然拒绝
+	assert.Error(t, UpdateGameConfigs([]GameConfig{{
+		GameKey: "snake", Name: "贪吃蛇", Status: "gone", SortOrder: 1,
+	}}))
+
+	// 隐藏后普通用户不能兑换
+	user := &User{Username: "hidden-game-user", Password: "password"}
+	require.NoError(t, DB.Create(user).Error)
+	quota, usd, err := RedeemGameScore(user.Id, user.Username, "snake", 1000)
+	assert.Error(t, err)
+	assert.Zero(t, quota)
+	assert.Zero(t, usd)
+}
+
+func TestListVisibleGameConfigsFiltersHiddenForUsers(t *testing.T) {
+	truncateTables(t)
+	// options 表用于读取页面标题，迁移上避免查询报错噪声
+	require.NoError(t, DB.AutoMigrate(&GameConfig{}, &GameScoreLog{}, &Option{}))
+	t.Cleanup(func() {
+		DB.Exec("DELETE FROM game_score_logs")
+		DB.Exec("DELETE FROM game_configs")
+	})
+
+	require.NoError(t, DB.Create(&GameConfig{
+		GameKey: "snake", Name: "贪吃蛇", Status: GameStatusAvailable, SortOrder: 1,
+	}).Error)
+	require.NoError(t, DB.Create(&GameConfig{
+		GameKey: "tetris", Name: "俄罗斯", Status: GameStatusHidden, SortOrder: 2,
+	}).Error)
+
+	// 普通用户：拿不到隐藏的游戏
+	visible, err := ListVisibleGameConfigs(false)
+	require.NoError(t, err)
+	require.Len(t, visible, 1)
+	assert.Equal(t, "snake", visible[0].GameKey)
+
+	// 管理员：全量返回，才能在大厅里恢复
+	all, err := ListVisibleGameConfigs(true)
+	require.NoError(t, err)
+	require.Len(t, all, 2)
+}

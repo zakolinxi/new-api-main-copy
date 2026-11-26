@@ -17,7 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   SideSheet,
   Button,
@@ -63,6 +69,10 @@ const GAME_COMPONENTS = {
 // 累计分数超过后端单次上限时会拆成多次请求。
 const MAX_REDEEM_CHUNKS = 20;
 
+// 测试模式由 GameRoom 提供：测试局不产生真实额度，兑换面板直接不渲染。
+// 用 context 下发，避免每个游戏都手动往下传一层 testMode。
+export const GameTestModeContext = createContext(false);
+
 export const RedeemPanel = ({
   gameKey,
   score,
@@ -72,6 +82,7 @@ export const RedeemPanel = ({
   onPendingChange,
 }) => {
   const [redeeming, setRedeeming] = useState(false);
+  const testMode = useContext(GameTestModeContext);
   const [maxPerRedeem, setMaxPerRedeem] = useState(0);
   const sendingRef = useRef(false);
   const scorePerUnit = gameKey === 'roguelike' ? 100000 : 1000;
@@ -159,6 +170,9 @@ export const RedeemPanel = ({
 
   const batchCount =
     maxPerRedeem > 0 ? Math.ceil(Math.floor(score) / maxPerRedeem) : 1;
+
+  // 测试模式不给兑换入口：分数是测试数据，换成额度就是凭空发钱
+  if (testMode) return null;
 
   return (
     <div className='game-redeem-panel'>

@@ -151,12 +151,22 @@ function miningReducer(state, action) {
     }
     case 'reset':
       return { ...initialState, logSeq: state.logSeq };
+    // 测试模式：矿工拉满、深度 60 米、镐子满耐久，分数给 5 万当启动资金
+    case 'test':
+      return {
+        ...initialState,
+        logSeq: state.logSeq,
+        depth: 60,
+        durability: 100,
+        miners: MAX_MINERS,
+        score: Math.min(50000, scoreLimit(action.maxScore)),
+      };
     default:
       return state;
   }
 }
 
-const TokenMining = ({ t }) => {
+const TokenMining = ({ t, testMode = false, onExitGuardChange }) => {
   const [state, dispatch] = useReducer(miningReducer, initialState);
   const [maxScore, setMaxScore] = useState(DEFAULT_MAX_SCORE);
   const [pending, setPending] = useState(false);
@@ -206,6 +216,8 @@ const TokenMining = ({ t }) => {
 
   // 分数到顶自动整笔结算：同一分数只尝试一次，失败后保留分数交给手动兑换，避免重试风暴
   useEffect(() => {
+    // 测试模式的分数是虚构的，绝不能触发真实结算
+    if (testMode) return;
     if (state.score < maxScore) {
       failedScoreRef.current = -1;
       return;
@@ -244,10 +256,23 @@ const TokenMining = ({ t }) => {
         if (mountedRef.current) setPending(false);
       }
     })();
-  }, [state.score, maxScore, t]);
+  }, [state.score, maxScore, t, testMode]);
+
+  // 测试模式：等上限取回来后再铺初始状态，避免用默认 100 万覆盖后端配置
+  useEffect(() => {
+    if (!testMode) return;
+    dispatch({ type: 'test', maxScore });
+  }, [testMode, maxScore]);
+
+  // 挖矿的分数只活在页面内存里，退出后不会恢复。把未兑换分数上报给外层，
+  // 让返回按钮在有分数时先弹一次确认，避免手滑把挖到的分数丢掉。
+  useEffect(() => {
+    if (!onExitGuardChange) return undefined;
+    onExitGuardChange({ score: state.score });
+    return () => onExitGuardChange(null);
+  }, [state.score, onExitGuardChange]);
 
   const dig = () => dispatch({ type: 'dig', maxScore });
-
   const repair = () => dispatch({ type: 'repair' });
 
   const hire = () => dispatch({ type: 'hire' });
@@ -278,8 +303,8 @@ const TokenMining = ({ t }) => {
     <div>
       <div className='flex items-center justify-between mb-2 flex-wrap gap-2'>
         <Text strong>
-          {t('深度')}: {state.depth}m · {t('得分')}: {state.score} / {maxScore} ·{' '}
-          {t('矿工')}: {state.miners}/{MAX_MINERS}
+          {t('深度')}: {state.depth}m · {t('得分')}: {state.score} / {maxScore}{' '}
+          · {t('矿工')}: {state.miners}/{MAX_MINERS}
         </Text>
         <Button size='small' onClick={reset}>
           {t('重新开始')}
@@ -300,7 +325,11 @@ const TokenMining = ({ t }) => {
           {state.clicks} {t('次')}
         </Text>
         <div style={{ width: '80%' }} className='mt-3'>
-          <Progress percent={progressPercent} showInfo={false} stroke='#f59e0b' />
+          <Progress
+            percent={progressPercent}
+            showInfo={false}
+            stroke='#f59e0b'
+          />
         </div>
       </div>
 
@@ -335,7 +364,10 @@ const TokenMining = ({ t }) => {
       </div>
 
       {state.logs.length > 0 && (
-        <div className='mt-3 text-xs' style={{ color: 'var(--semi-color-text-2)' }}>
+        <div
+          className='mt-3 text-xs'
+          style={{ color: 'var(--semi-color-text-2)' }}
+        >
           {state.logs.map((line) => (
             <div key={line.id}>{t(line.text, line.params)}</div>
           ))}
